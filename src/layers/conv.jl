@@ -1298,3 +1298,71 @@ function Base.show(io::IO, l::SGConv)
     l.k == 1 || print(io, ", ", l.k)
     print(io, ")")
 end
+
+
+@doc raw"""
+    TransConv(in => out, act=identity; init=glorot_uniform, bias=true)
+
+The residual gated graph convolutional operator from the [Residual Gated Graph ConvNets](https://arxiv.org/abs/1711.07553) paper.
+
+The layer's forward pass is given by
+
+```math
+\mathbf{x}_i' = act\big(U\mathbf{x}_i + \sum_{j \in N(i)} \eta_{ij} V \mathbf{x}_j\big),
+```
+where the edge gates ``\eta_{ij}`` are given by
+
+```math
+\eta_{ij} = sigmoid(A\mathbf{x}_i + B\mathbf{x}_j).
+```
+
+# Arguments
+
+- `in`: The dimension of input features.
+- `out`: The dimension of output features.
+- `act`: Activation function.
+- `init`: Weight matrices' initializing function. 
+- `bias`: Learn an additive bias if true.
+"""
+struct TransConv <: GNNLayer
+    A
+    B
+    U
+    V
+    bias
+    σ
+end
+
+@functor TransConv
+
+function TransConv(ch::Pair{Int,Int}, σ=identity;
+                      init=glorot_uniform, bias::Bool=true)
+    in, out = ch             
+    A = init(out, in)
+    B = init(out, in)
+    U = init(out, in)
+    V = init(out, in)
+    b = bias ? Flux.create_bias(A, true, out) : false
+    return TransConv(A, B, U, V, b, σ)
+end
+
+function (l::TransConv)(g::GNNGraph, x::AbstractMatrix)
+    check_num_nodes(g, x)
+
+    message(xi, xj, e) = sigmoid.(xi.Ax .+ xj.Bx) .* xj.Vx
+    
+    Ax = l.A * x
+    Bx = l.B * x
+    Vx = l.V * x
+    
+    m = propagate(message, g, +, xi=(; Ax), xj=(; Bx, Vx))
+    
+    return l.σ.(l.U*x .+ m .+ l.bias)                                      
+end
+
+function Base.show(io::IO, l::TransConv)
+    out_channel, in_channel = size(l.A)
+    print(io, "TransConv(", in_channel, " => ", out_channel)
+    l.σ == identity || print(io, ", ", l.σ)
+    print(io, ")")
+end

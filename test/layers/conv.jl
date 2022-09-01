@@ -287,4 +287,12 @@
             end
         end
     end
+
+
+    @testset "TransConv" begin
+        l = TransConv(in_channel => out_channel, tanh, bias=true)
+        for g in test_graphs
+            test_layer(l, g, rtol=RTOL_HIGH, outsize=(out_channel, g.num_nodes))
+        end
+    end
 end
