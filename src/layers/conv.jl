@@ -1330,6 +1330,7 @@ struct MHAConv{TQ<:AbstractMatrix, TK<:AbstractMatrix, TV<:AbstractMatrix,
     K::TK
     V::TV
     O::TO
+    dk::Int
     heads::Int
     add_self_loops::Bool
     sqrt_dk::Float32
@@ -1342,11 +1343,11 @@ function MHAConv(ch::Pair{Int, Int}; heads::Int=1, init=glorot_uniform,
     in, out = ch
     dk = dv = in ÷ heads
     @assert dk * heads == in
-    Q = init(dk, in)
-    K = init(dk, in)
-    V = init(dv, in)
-    O = init(out, dv)
-    return MHAConv(Q, K, V, O, heads, add_self_loops, Float32(√dk))
+    Q = init(in, in)
+    K = init(in, in)
+    V = init(in, in)
+    O = init(out, dv * heads)
+    return MHAConv(Q, K, V, O, dk, heads, add_self_loops, Float32(√dk))
 end
 
 function (l::MHAConv)(g::GNNGraph, x::AbstractMatrix)
@@ -1356,21 +1357,32 @@ function (l::MHAConv)(g::GNNGraph, x::AbstractMatrix)
         g = add_self_loops(g)
     end
 
+    dk = l.dk
+    heads = l.heads
     Qx = l.Q * x
     Kx = l.K * x
     Vx = l.V * x
+    Qx = reshape(Qx, dk, heads, :)
+    Kx = reshape(Kx, dk, heads, :)
+    Vx = reshape(Vx, dk, heads, :)
+
     sqrt_dk = l.sqrt_dk
     
     function message(xi, xj, e) 
-        uij = xi.Qx .* xj.Kx ./ sqrt_dk
-        aij = exp.(uij)
-        return (a = aij, b = sum(aij .* xj.Vx, dims=1))
+        uij = sum(xi.Qx .* xj.Kx, dims=1) ./ sqrt_dk
+        exp_uij = exp.(uij)
+        exp_uij_Vx = exp_uij .* xj.Vx
+        # @show exp_uij xj.Vx exp_uij_Vx
+        return (; exp_uij, exp_uij_Vx)
     end
 
     m = propagate(message, g, +; xi=(; Qx, Vx), xj=(; Kx, Vx))
-    x = m.b ./ m.a
-    Ox = l.O * x
-    return Ox
+    h = m.exp_uij_Vx ./ m.exp_uij
+    # @show m.exp_uij_Vx m.exp_uij h
+    h = reshape(h, dk * heads, :)  # concatenate heads
+    Oh = l.O * h
+    # @show Oh
+    return Oh
 end
 
 function Base.show(io::IO, l::MHAConv)

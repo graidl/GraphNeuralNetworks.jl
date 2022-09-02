@@ -97,26 +97,26 @@ function mha()
     in_channel = 2
     out_channel = 1
     dh = 4
-    heads = 1
+    heads = 2
     g = GNNGraph(adj1, ndata=rand(Float32, in_channel, N), graph_type=:sparse)
     x = node_features(g)
 
-    layer = MHAConv(in_channel => out_channel)
+    # layer = MHAConv(in_channel => out_channel; heads)
+    # y = layer(g, x)
 
     model = GNNChain(Dense(in_channel => dh),
         MHAConv(dh => dh; heads),
         Dense(dh => out_channel))
-
-    y = layer(g, x)
-    @show y
-
     y = model(g, x)
     @show y
+
+    # y = model(g, x)
+    # @show y
 end
 
 end  # module
 
-Mha.mha()
+Mha.mha();
 
 # train()
 
