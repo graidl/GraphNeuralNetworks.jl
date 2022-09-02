@@ -30,7 +30,7 @@ The table below lists all graph convolutional layers implemented in the *GraphNe
 | [`NNConv`](@ref)            |          |           |     ✓       |
 | [`ResGatedGraphConv`](@ref) |          |           |             |
 | [`SAGEConv`](@ref)          |     ✓    |           |             |
-| [`TransConv`](@ref)         |          |           |             |
+| [`MHAConv`](@ref)         |          |           |             |
 
 
 ## Docs

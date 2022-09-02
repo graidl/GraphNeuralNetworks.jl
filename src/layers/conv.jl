@@ -1301,11 +1301,11 @@ end
 
 
 @doc raw"""
-    TransConv(in => out, act=identity; init=glorot_uniform, bias=true)
+    TODO: MHAConv(in => out, act=identity; init=glorot_uniform, bias=true)
 
-The residual gated graph convolutional operator from the [Residual Gated Graph ConvNets](https://arxiv.org/abs/1711.07553) paper.
+The Transformer-like multi head attention convolutional operator from the [Attention, Learn to Solve Routing Problems!](https://arxiv.org/abs/1706.03762) paper.
 
-The layer's forward pass is given by
+TODO: The layer's forward pass is given by
 
 ```math
 \mathbf{x}_i' = act\big(U\mathbf{x}_i + \sum_{j \in N(i)} \eta_{ij} V \mathbf{x}_j\big),
@@ -1324,45 +1324,58 @@ where the edge gates ``\eta_{ij}`` are given by
 - `init`: Weight matrices' initializing function. 
 - `bias`: Learn an additive bias if true.
 """
-struct TransConv <: GNNLayer
-    A
-    B
-    U
-    V
-    bias
-    σ
+struct MHAConv{TQ<:AbstractMatrix, TK<:AbstractMatrix, TV<:AbstractMatrix,
+        TO<:AbstractMatrix} <: GNNLayer
+    Q::TQ
+    K::TK
+    V::TV
+    O::TO
+    heads::Int
+    add_self_loops::Bool
+    sqrt_dk::Float32
 end
 
-@functor TransConv
+@functor MHAConv
 
-function TransConv(ch::Pair{Int,Int}, σ=identity;
-                      init=glorot_uniform, bias::Bool=true)
-    in, out = ch             
-    A = init(out, in)
-    B = init(out, in)
-    U = init(out, in)
-    V = init(out, in)
-    b = bias ? Flux.create_bias(A, true, out) : false
-    return TransConv(A, B, U, V, b, σ)
+function MHAConv(ch::Pair{Int, Int}; heads::Int=1, init=glorot_uniform,
+        add_self_loops::Bool=true)
+    in, out = ch
+    dk = dv = in ÷ heads
+    @assert dk * heads == in == out
+    Q = init(dk, in)
+    K = init(dk, in)
+    V = init(dv, in)
+    O = init(in, dv)
+    return MHAConv(Q, K, V, O, heads, add_self_loops, Float32(√dk))
 end
 
-function (l::TransConv)(g::GNNGraph, x::AbstractMatrix)
+function (l::MHAConv)(g::GNNGraph, x::AbstractMatrix)
     check_num_nodes(g, x)
 
-    message(xi, xj, e) = sigmoid.(xi.Ax .+ xj.Bx) .* xj.Vx
-    
-    Ax = l.A * x
-    Bx = l.B * x
+    if l.add_self_loops
+        g = add_self_loops(g)
+    end
+
+    Qx = l.Q * x
+    Kx = l.K * x
     Vx = l.V * x
+    sqrt_dk = l.sqrt_dk
     
-    m = propagate(message, g, +, xi=(; Ax), xj=(; Bx, Vx))
-    
-    return l.σ.(l.U*x .+ m .+ l.bias)                                      
+    function message(xi, xj, e) 
+        uij = xi.Qx .* xj.Kx ./ sqrt_dk
+        aij = exp.(uij)
+        return (a = aij, b = sum(aij .* xj.Vx, dims=1))
+    end
+
+    m = propagate(message, g, +; xi=(; Qx, Vx), xj=(; Kx, Vx))
+    x = m.b ./ m.a
+    Ox = l.O * x
+    return Ox
 end
 
-function Base.show(io::IO, l::TransConv)
+function Base.show(io::IO, l::MHAConv)
     out_channel, in_channel = size(l.A)
-    print(io, "TransConv(", in_channel, " => ", out_channel)
+    print(io, "MHAConv(", in_channel, " => ", out_channel)
     l.σ == identity || print(io, ", ", l.σ)
     print(io, ")")
 end
