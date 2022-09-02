@@ -101,11 +101,13 @@ function mha()
     g = GNNGraph(adj1, ndata=rand(Float32, in_channel, N), graph_type=:sparse)
     x = node_features(g)
 
-    # layer = MHAConv(in_channel => out_channel; heads)
+    layer = MHAConv(in_channel => out_channel, heads)
+    println(layer)
     # y = layer(g, x)
 
     model = GNNChain(Dense(in_channel => dh),
-        MHAConv(dh => dh; heads),
+        TransConv(dh, heads),
+        TransConv(dh, heads),
         Dense(dh => out_channel))
     y = model(g, x)
     @show y

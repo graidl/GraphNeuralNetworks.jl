@@ -1338,15 +1338,15 @@ end
 
 @functor MHAConv
 
-function MHAConv(ch::Pair{Int, Int}; heads::Int=1, init=glorot_uniform,
+function MHAConv(ch::Pair{Int, Int}, heads::Int=1; init=glorot_uniform,
         add_self_loops::Bool=true)
     in, out = ch
-    dk = dv = in ÷ heads
+    dk = in ÷ heads
     @assert dk * heads == in
     Q = init(in, in)
     K = init(in, in)
     V = init(in, in)
-    O = init(out, dv * heads)
+    O = init(out, in)
     return MHAConv(Q, K, V, O, dk, heads, add_self_loops, Float32(√dk))
 end
 
@@ -1386,8 +1386,29 @@ function (l::MHAConv)(g::GNNGraph, x::AbstractMatrix)
 end
 
 function Base.show(io::IO, l::MHAConv)
-    out_channel, in_channel = size(l.A)
-    print(io, "MHAConv(", in_channel, " => ", out_channel)
-    l.σ == identity || print(io, ", ", l.σ)
-    print(io, ")")
+    in, out = size(l.O)
+    print(io, "MHAConv($in => $out, $(l.heads)), ")
 end
+
+
+struct TransConv{TT} <: GNNLayer
+    t::TT
+    dh::Int
+    heads::Int
+end
+
+@functor TransConv
+
+function TransConv(dh::Int=128, heads::Int=1; init=glorot_uniform,
+        add_self_loops::Bool=true)
+    t = GNNChain(Parallel(+, identity, MHAConv(dh => dh, heads; init, add_self_loops)),
+        SkipConnection(Dense(dh => dh), +),
+        BatchNorm(dh),
+        SkipConnection(Chain(Dense(dh => dh, relu), Dense(dh => dh)), +),
+        BatchNorm(dh))
+    TransConv(t, dh, heads)
+end
+
+(l::TransConv)(g::GNNGraph, x::AbstractMatrix) = l.t(g, x)
+
+Base.show(io::IO, l::TransConv) = print(io, "TransConv(", l.dh, ", ", l.heads, ")")

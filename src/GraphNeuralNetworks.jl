@@ -63,6 +63,7 @@ export
     GMMConv,
     SGConv,
     MHAConv,
+    TransConv,
     
     # layers/pool
     GlobalPool,
