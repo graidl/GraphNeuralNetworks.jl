@@ -23,7 +23,7 @@ function build()
 end
 
 # Build the notebooks; defaults to true.
-if get(ENV, "BUILD_DOCS_NOTEBOOKS", "true") == "true"
+if get(ENV, "BUILD_DOCS_NOTEBOOKS", "false") == "true"
     build()
 end
 

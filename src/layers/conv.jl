@@ -1301,7 +1301,7 @@ end
 
 
 @doc raw"""
-    TODO: MHAConv(in => out, act=identity; init=glorot_uniform, bias=true)
+    MHAConv(in => out, act=identity; init=glorot_uniform, bias=true)
 
 The Transformer-like multi head attention convolutional operator from the [Attention,
 Learn to Solve Routing Problems!](https://arxiv.org/abs/1706.03762) paper.
@@ -1406,6 +1406,45 @@ function Base.show(io::IO, l::MHAConv)
 end
 
 
+@doc raw"""
+    TransConv(in => out, act=identity; init=glorot_uniform, bias=true)
+
+The Transformer-like multi head attention convolutional operator from the [Attention,
+Learn to Solve Routing Problems!](https://arxiv.org/abs/1706.03762) paper.
+
+The layer's forward pass is given by
+```math
+x_i' = O\mathrm{cat}(h_1,\ldots,h_M)
+act\big(Ux_i + \sum_{j \in N(i)} \eta_{ij} V \mathbf{x}_j\big),
+```
+where ``h_k,\ k=1\ldots,h_M`` are the ``M``heads determined by
+```math
+h_k = \sum_{j\in N(i)} a_{ij} v_j,
+```
+with the attention scores being
+```math
+a_{ij} = \frac{e^{u_{ij}}}{\sum_{j'\in N(i)} e^{u_{ij'}}}
+```
+and
+```math
+u_{ij} = \begin{cases}
+    \frac{q_i^Tk_j}\sqrt{d_k} & \text{ if } i \text{ adjacent to } ``j`` \\
+    -\infty & \text{ else.}
+\end{cases}.
+```
+The query, key, and value vectors are determined from the input vector ``x_i``, as
+```math
+q_i = Q x_i,\quad k_i=K x_i, \quad \text{ and } v_i=V x_i.
+```
+
+# Arguments TODO
+
+- `in`: The dimension of input features.
+- `out`: The dimension of output features.
+- `act`: Activation function.
+- `init`: Weight matrices' initializing function. 
+- `bias`: Learn an additive bias if true.
+"""
 struct TransConv{TT<:GNNChain} <: GNNLayer
     t::TT
     dh::Int
@@ -1427,4 +1466,4 @@ end
 
 (l::TransConv)(g::GNNGraph, x::AbstractMatrix) = l.t(g, x)
 
-Base.show(io::IO, l::TransConv) = print(io, "TransConv($(l.dh), $(l.heads), $(l.dff)")")
+Base.show(io::IO, l::TransConv) = print(io, "TransConv($(l.dh), $(l.heads), $(l.dff)")
