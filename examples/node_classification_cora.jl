@@ -102,7 +102,7 @@ function mha()
     x = node_features(g)
 
     layer = MHAConv(in_channel => out_channel, heads)
-    println(layer)
+    # println(layer)
     # y = layer(g, x)
 
     model = GNNChain(Dense(in_channel => dh),

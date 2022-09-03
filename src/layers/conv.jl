@@ -1303,20 +1303,35 @@ end
 @doc raw"""
     TODO: MHAConv(in => out, act=identity; init=glorot_uniform, bias=true)
 
-The Transformer-like multi head attention convolutional operator from the [Attention, Learn to Solve Routing Problems!](https://arxiv.org/abs/1706.03762) paper.
+The Transformer-like multi head attention convolutional operator from the [Attention,
+Learn to Solve Routing Problems!](https://arxiv.org/abs/1706.03762) paper.
 
-TODO: The layer's forward pass is given by
-
+The layer's forward pass is given by
 ```math
-\mathbf{x}_i' = act\big(U\mathbf{x}_i + \sum_{j \in N(i)} \eta_{ij} V \mathbf{x}_j\big),
+x_i' = O\mathrm{cat}(h_1,\ldots,h_M)
+act\big(Ux_i + \sum_{j \in N(i)} \eta_{ij} V \mathbf{x}_j\big),
 ```
-where the edge gates ``\eta_{ij}`` are given by
-
+where ``h_k,\ k=1\ldots,h_M`` are the ``M``heads determined by
 ```math
-\eta_{ij} = sigmoid(A\mathbf{x}_i + B\mathbf{x}_j).
+h_k = \sum_{j\in N(i)} a_{ij} v_j,
+```
+with the attention scores being
+```math
+a_{ij} = \frac{e^{u_{ij}}}{\sum_{j'\in N(i)} e^{u_{ij'}}}
+```
+and
+```math
+u_{ij} = \begin{cases}
+    \frac{q_i^Tk_j}\sqrt{d_k} & \text{ if } i \text{ adjacent to } ``j`` \\
+    -\infty & \text{ else.}
+\end{cases}.
+```
+The query, key, and value vectors are determined from the input vector ``x_i``, as
+```math
+q_i = Q x_i,\quad k_i=K x_i, \quad \text{ and } v_i=V x_i.
 ```
 
-# Arguments
+# Arguments TODO
 
 - `in`: The dimension of input features.
 - `out`: The dimension of output features.
@@ -1338,7 +1353,7 @@ end
 
 @functor MHAConv
 
-function MHAConv(ch::Pair{Int, Int}, heads::Int=1; init=glorot_uniform,
+function MHAConv(ch::Pair{Int, Int}= (128 => 128), heads::Int=8; init=glorot_uniform,
         add_self_loops::Bool=true)
     in, out = ch
     dk = in ÷ heads
@@ -1391,24 +1406,25 @@ function Base.show(io::IO, l::MHAConv)
 end
 
 
-struct TransConv{TT} <: GNNLayer
+struct TransConv{TT<:GNNChain} <: GNNLayer
     t::TT
     dh::Int
     heads::Int
+    dff::Int
 end
 
 @functor TransConv
 
-function TransConv(dh::Int=128, heads::Int=1; init=glorot_uniform,
+function TransConv(dh::Int=128, heads::Int=8, dff=512; init=glorot_uniform,
         add_self_loops::Bool=true)
     t = GNNChain(Parallel(+, identity, MHAConv(dh => dh, heads; init, add_self_loops)),
         SkipConnection(Dense(dh => dh), +),
         BatchNorm(dh),
-        SkipConnection(Chain(Dense(dh => dh, relu), Dense(dh => dh)), +),
+        SkipConnection(Chain(Dense(dh => dff, relu), Dense(dff => dh)), +),
         BatchNorm(dh))
-    TransConv(t, dh, heads)
+    TransConv(t, dh, heads, dff)
 end
 
 (l::TransConv)(g::GNNGraph, x::AbstractMatrix) = l.t(g, x)
 
-Base.show(io::IO, l::TransConv) = print(io, "TransConv(", l.dh, ", ", l.heads, ")")
+Base.show(io::IO, l::TransConv) = print(io, "TransConv($(l.dh), $(l.heads), $(l.dff)")")
