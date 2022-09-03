@@ -1305,11 +1305,12 @@ end
 
 The Transformer-like multi head attention convolutional operator from the [Attention,
 Learn to Solve Routing Problems!](https://arxiv.org/abs/1706.03762) paper.
+Note that [`TransConv`](@ref) extends this basic layer with a feed-forward NN, 
+batch normalization, and skip layers as done in the Transformer.
 
 The layer's forward pass is given by
 ```math
-x_i' = O\mathrm{cat}(h_1,\ldots,h_M)
-act\big(Ux_i + \sum_{j \in N(i)} \eta_{ij} V \mathbf{x}_j\big),
+x_i' = O\cdot\mathrm{cat}(h_1,\ldots,h_M)
 ```
 where ``h_k,\ k=1\ldots,h_M`` are the ``M``heads determined by
 ```math
@@ -1322,7 +1323,7 @@ a_{ij} = \frac{e^{u_{ij}}}{\sum_{j'\in N(i)} e^{u_{ij'}}}
 and
 ```math
 u_{ij} = \begin{cases}
-    \frac{q_i^Tk_j}\sqrt{d_k} & \text{ if } i \text{ adjacent to } ``j`` \\
+    \frac{q_i^Tk_j}{\sqrt{d_k}} & \text{ if } i \text{ adjacent to } j \\
     -\infty & \text{ else.}
 \end{cases}.
 ```
@@ -1331,13 +1332,13 @@ The query, key, and value vectors are determined from the input vector ``x_i``, 
 q_i = Q x_i,\quad k_i=K x_i, \quad \text{ and } v_i=V x_i.
 ```
 
-# Arguments TODO
+# Arguments 
 
 - `in`: The dimension of input features.
 - `out`: The dimension of output features.
-- `act`: Activation function.
+- `heads`: Number of heads
 - `init`: Weight matrices' initializing function. 
-- `bias`: Learn an additive bias if true.
+- `add_self_loops`: Add self loops to also do self-attention
 """
 struct MHAConv{TQ<:AbstractMatrix, TK<:AbstractMatrix, TV<:AbstractMatrix,
         TO<:AbstractMatrix} <: GNNLayer
@@ -1353,7 +1354,7 @@ end
 
 @functor MHAConv
 
-function MHAConv(ch::Pair{Int, Int}= (128 => 128), heads::Int=8; init=glorot_uniform,
+function MHAConv(ch::Pair{Int, Int}=(128 => 128), heads::Int=8; init=glorot_uniform,
         add_self_loops::Bool=true)
     in, out = ch
     dk = in ÷ heads
@@ -1409,41 +1410,25 @@ end
 @doc raw"""
     TransConv(in => out, act=identity; init=glorot_uniform, bias=true)
 
-The Transformer-like multi head attention convolutional operator from the [Attention,
-Learn to Solve Routing Problems!](https://arxiv.org/abs/1706.03762) paper.
+The Transformer-like layer from the [Attention, Learn to Solve Routing 
+Problems!](https://arxiv.org/abs/1706.03762) paper.
+It makes use of the multi head attention convolutional operator [`MHAConv`](@ref) and
+adds a feed-forward NN, batch normalization and skip connections.
 
-The layer's forward pass is given by
+
+The layer's forward pass is given by TODO
 ```math
-x_i' = O\mathrm{cat}(h_1,\ldots,h_M)
-act\big(Ux_i + \sum_{j \in N(i)} \eta_{ij} V \mathbf{x}_j\big),
-```
-where ``h_k,\ k=1\ldots,h_M`` are the ``M``heads determined by
-```math
-h_k = \sum_{j\in N(i)} a_{ij} v_j,
-```
-with the attention scores being
-```math
-a_{ij} = \frac{e^{u_{ij}}}{\sum_{j'\in N(i)} e^{u_{ij'}}}
-```
-and
-```math
-u_{ij} = \begin{cases}
-    \frac{q_i^Tk_j}\sqrt{d_k} & \text{ if } i \text{ adjacent to } ``j`` \\
-    -\infty & \text{ else.}
-\end{cases}.
-```
-The query, key, and value vectors are determined from the input vector ``x_i``, as
-```math
-q_i = Q x_i,\quad k_i=K x_i, \quad \text{ and } v_i=V x_i.
+x_i' = O\cdot\mathrm{cat}(h_1,\ldots,h_M)
 ```
 
-# Arguments TODO
 
-- `in`: The dimension of input features.
-- `out`: The dimension of output features.
-- `act`: Activation function.
-- `init`: Weight matrices' initializing function. 
-- `bias`: Learn an additive bias if true.
+# Arguments
+
+- `dh`: The dimension of input and output features.
+- `heads`: The number of heads used in the multi head attention.
+- `dff`: The number of inner nodes in the feed-forward NN.
+- `init`: Weight matrices' initializing function.
+- `add_self_loops`: Add self loops to also do self-attention.
 """
 struct TransConv{TT<:GNNChain} <: GNNLayer
     t::TT
