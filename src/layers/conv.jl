@@ -1301,7 +1301,7 @@ end
 
 
 @doc raw"""
-    MHAConv(in => out, act=identity; init=glorot_uniform, bias=true)
+    MHAConv(in => out, heads=8; init=glorot_uniform, add_self_loops=true)
 
 The Transformer-like multi head attention convolutional operator from the [Attention,
 Learn to Solve Routing Problems!](https://arxiv.org/abs/1706.03762) paper.
@@ -1310,11 +1310,11 @@ batch normalization, and skip layers as done in the Transformer.
 
 The layer's forward pass is given by
 ```math
-x_i' = O\cdot\mathrm{cat}(h_1,\ldots,h_M)
+x_i' = O\,\mathrm{cat}(h_1,\ldots,h_M)
 ```
-where ``h_k,\ k=1\ldots,h_M`` are the ``M``heads determined by
+where ``h_k,\ k=1\ldots,h_M`` are the ``M`` heads determined by
 ```math
-h_k = \sum_{j\in N(i)} a_{ij} v_j,
+h_{ki} = \sum_{j\in N(i)} a_{ij} v_j,
 ```
 with the attention scores being
 ```math
@@ -1325,7 +1325,7 @@ and
 u_{ij} = \begin{cases}
     \frac{q_i^Tk_j}{\sqrt{d_k}} & \text{ if } i \text{ adjacent to } j \\
     -\infty & \text{ else.}
-\end{cases}.
+\end{cases}
 ```
 The query, key, and value vectors are determined from the input vector ``x_i``, as
 ```math
@@ -1408,20 +1408,23 @@ end
 
 
 @doc raw"""
-    TransConv(in => out, act=identity; init=glorot_uniform, bias=true)
+    TransConv(dh=128, heads=8, dff=512; init=glorot_uniform, add_self_loops=true)
 
 The Transformer-like layer from the [Attention, Learn to Solve Routing 
 Problems!](https://arxiv.org/abs/1706.03762) paper.
 It makes use of the multi head attention convolutional operator [`MHAConv`](@ref) and
 adds a feed-forward NN, batch normalization and skip connections.
 
-
-The layer's forward pass is given by TODO
+The layer's forward pass is given by
 ```math
-x_i' = O\cdot\mathrm{cat}(h_1,\ldots,h_M)
+x_i' = \mathrm{BN}(h_i + \mathrm{FF}(h_i))
 ```
-
-
+with
+```math
+h_i = \mathrm{BN}(x_i + \mathrm{MHA}(x_i)),
+```
+where BN is a batch normalization layer, MHA is the multi head attention layer, and FF is
+a feed-forward Neural network consisting of one hidden layer of depth `dff`.
 # Arguments
 
 - `dh`: The dimension of input and output features.
