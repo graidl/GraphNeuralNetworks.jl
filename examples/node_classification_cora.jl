@@ -116,9 +116,63 @@ function mha()
     # @show y
 end
 
+struct MHA2GNN
+    dense1
+    mha2conv
+    dense2
+end
+
+function MHA2GNN(din, dein, dout, dh, heads)
+    MHA2GNN(Dense(din => dh), MHA2Conv((din, dein) => dout), Dense(dout => dout))
+end
+
+function (model::MHA2GNN)(g::GNNGraph, x, e)
+    x = model.dense1(x)
+    x = model.mha2conv(g, x, e)
+    x = model.dense2(x)
+end
+
+Flux.@functor MHA2GNN
+
+function mha2()
+    N = 4
+    adj1 =  [0 1 0 1
+             1 0 1 0
+             0 1 0 1
+             1 0 1 0]
+    Ne = sum(adj1)
+    
+    in_channel = 2
+    ein_channel = 2
+    out_channel = 1
+    dh = 4
+    heads = 2
+    g = GNNGraph(adj1, ndata=rand(Float32, in_channel, N), 
+            edata=rand(Float32, ein_channel, Ne), 
+            graph_type=:sparse)
+    x = node_features(g)
+    e = edge_features(g)
+
+    layer = MHA2Conv((in_channel, ein_channel) => out_channel, heads)
+    # println(layer)
+    # y = layer(g, x)
+
+    model = GNNChain(Dense(in_channel => dh),
+        TransConv(dh, heads),
+        TransConv(dh, heads),
+        Dense(dh => out_channel))
+    model2 = MHA2GNN(in_channel, ein_channel, 2, 2, 1)
+    y = model2(g, x, e)
+    @show y
+
+    # y = model(g, x)
+    # @show y
+end
+
+
 end  # module
 
-Mha.mha();
+Mha.mha2();
 
 # train()
 

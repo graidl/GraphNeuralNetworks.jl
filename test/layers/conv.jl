@@ -266,7 +266,7 @@
     @testset "GMMConv" begin
         ein_channel = 10
         K = 5
-        l = GMMConv((in_channel, ein_channel )=> out_channel, K=K)
+        l = GMMConv((in_channel, ein_channel ) => out_channel, K=K)
         for g in test_graphs
             g = GNNGraph(g, edata=rand(Float32, ein_channel, g.num_edges))
             test_layer(l, g, rtol=RTOL_HIGH, outsize = (out_channel, g.num_nodes))
@@ -288,11 +288,21 @@
         end
     end
 
-
     @testset "MHAConv" begin
         l = MHAConv(in_channel => out_channel, heads = 1)
         for g in test_graphs
             test_layer(l, g, rtol=RTOL_HIGH, outsize=(out_channel, g.num_nodes))
         end
     end
+
+    @testset "MHA2Conv" begin
+        ein = 2
+        l = MHA2Conv((in_channel, ein) => out_channel)
+        g = GNNGraph(g1, edata=rand(T, ein, g1.num_edges))
+        test_layer(l, g, rtol=RTOL_LOW, 
+            exclude_grad_fields = [:negative_slope],
+            outsize=(out_channel, g.num_nodes))
+    end
 end
+
+
