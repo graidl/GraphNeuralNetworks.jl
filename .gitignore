@@ -10,3 +10,8 @@ Manifest.toml
 LocalPreferences.toml
 .DS_Store
 JuliaSysimage.so
+docs/src/democards/gridtheme.css
+docs/src/tutorials/introductory_tutorials/gnn_intro_pluto.jl
+docs/src/tutorials/introductory_tutorials/assets/graph_classification.gif
+docs/src/tutorials/introductory_tutorials/assets/intro_1.png
+docs/src/tutorials/introductory_tutorials/assets/node_classsification.gif
