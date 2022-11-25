@@ -1,9 +1,12 @@
 ### A Pluto.jl notebook ###
-# v0.19.6
+# v0.19.13
 
 #> [frontmatter]
+#> author = "[Carlo Lucibello](https://github.com/CarloLucibello)"
 #> title = "Graph Classification with Graph Neural Networks"
 #> date = "2022-05-23"
+#> description = "Tutorial for Graph Classification using GraphNeuralNetworks.jl"
+#> cover = "assets/graph_classification.gif"
 
 using Markdown
 using InteractiveUtils
@@ -14,10 +17,10 @@ begin
     using Pkg
     Pkg.activate(; temp=true)
     Pkg.add([
-        PackageSpec(; path=joinpath(@__DIR__,"..","..","..")),
+        PackageSpec(; name="GraphNeuralNetworks", version="0.4"),
         PackageSpec(; name="Flux", version="0.13"),
-		PackageSpec(; name="MLDatasets", version="0.7"),
-		PackageSpec(; name="MLUtils"),
+        PackageSpec(; name="MLDatasets", version="0.7"),
+        PackageSpec(; name="MLUtils"),
 	])
 	Pkg.develop("GraphNeuralNetworks")
 end
@@ -38,12 +41,10 @@ end;
 
 # ╔═╡ 15136fd8-f9b2-4841-9a95-9de7b8969687
 md"""
-# Graph Classification with Graph Neural Networks
-
-*This Pluto noteboook is a julia adaptation of the Pytorch Geometric tutorials that can be found [here](https://pytorch-geometric.readthedocs.io/en/latest/notes/colabs.html).*
+*This Pluto notebook is a julia adaptation of the Pytorch Geometric tutorials that can be found [here](https://pytorch-geometric.readthedocs.io/en/latest/notes/colabs.html).*
 
 In this tutorial session we will have a closer look at how to apply **Graph Neural Networks (GNNs) to the task of graph classification**.
-Graph classification refers to the problem of classifiying entire graphs (in contrast to nodes), given a **dataset of graphs**, based on some structural graph properties.
+Graph classification refers to the problem of classifying entire graphs (in contrast to nodes), given a **dataset of graphs**, based on some structural graph properties.
 Here, we want to embed entire graphs, and we want to embed those graphs in such a way so that they are linearly separable given a task at hand.
 
 
@@ -119,7 +120,7 @@ In the image or language domain, this procedure is typically achieved by **resca
 The length of this dimension is then equal to the number of examples grouped in a mini-batch and is typically referred to as the `batchsize`.
 
 However, for GNNs the two approaches described above are either not feasible or may result in a lot of unnecessary memory consumption.
-Therefore, GNN.jl opts for another approach to achieve parallelization across a number of examples. Here, adjacency matrices are stacked in a diagonal fashion (creating a giant graph that holds multiple isolated subgraphs), and node and target features are simply concatenated in the node dimension (the last dimension).
+Therefore, GraphNeuralNetworks.jl opts for another approach to achieve parallelization across a number of examples. Here, adjacency matrices are stacked in a diagonal fashion (creating a giant graph that holds multiple isolated subgraphs), and node and target features are simply concatenated in the node dimension (the last dimension).
 
 This procedure has some crucial advantages over other batching procedures:
 
@@ -127,7 +128,7 @@ This procedure has some crucial advantages over other batching procedures:
 
 2. There is no computational or memory overhead since adjacency matrices are saved in a sparse fashion holding only non-zero entries, *i.e.*, the edges.
 
-GNN.jl can **batch multiple graphs into a single giant graph**:
+GraphNeuralNetworks.jl can **batch multiple graphs into a single giant graph**:
 """
 
 
@@ -162,7 +163,7 @@ There exists multiple **readout layers** in literature, but the most common one 
 \mathbf{x}_{\mathcal{G}} = \frac{1}{|\mathcal{V}|} \sum_{v \in \mathcal{V}} \mathcal{x}^{(L)}_v
 ```
 
-GNN.jl provides this functionality via `GlobalPool(mean)`, which takes in the node embeddings of all nodes in the mini-batch and the assignment vector `graph_indicator` to compute a graph embedding of size `[hidden_channels, batchsize]`.
+GraphNeuralNetworks.jl provides this functionality via `GlobalPool(mean)`, which takes in the node embeddings of all nodes in the mini-batch and the assignment vector `graph_indicator` to compute a graph embedding of size `[hidden_channels, batchsize]`.
 
 The final architecture for applying GNNs to the task of graph classification then looks as follows and allows for complete end-to-end training:
 """
@@ -242,7 +243,7 @@ end
 # ╔═╡ 3454b311-9545-411d-b47a-b43724b84c36
 md"""
 As one can see, our model reaches around **74% test accuracy**.
-Reasons for the fluctations in accuracy can be explained by the rather small dataset (only 38 test graphs), and usually disappear once one applies GNNs to larger datasets.
+Reasons for the fluctuations in accuracy can be explained by the rather small dataset (only 38 test graphs), and usually disappear once one applies GNNs to larger datasets.
 
 ## (Optional) Exercise
 
@@ -254,7 +255,7 @@ An alternative formulation ([Morris et al. (2018)](https://arxiv.org/abs/1810.02
 \mathbf{x}_i^{(\ell+1)} = \mathbf{W}^{(\ell + 1)}_1 \mathbf{x}_i^{(\ell)} + \mathbf{W}^{(\ell + 1)}_2 \sum_{j \in \mathcal{N}(i)} \mathbf{x}_j^{(\ell)}
 ```
 
-This layer is implemented under the name `GraphConv` in GNN.jl.
+This layer is implemented under the name `GraphConv` in GraphNeuralNetworks.jl.
 
 As an exercise, you are invited to complete the following code to the extent that it makes use of `GraphConv` rather than `GCNConv`.
 This should bring you close to **82% test accuracy**.
@@ -271,16 +272,16 @@ You have learned how graphs can be batched together for better GPU utilization, 
 """
 
 # ╔═╡ Cell order:
-# ╠═c97a0002-2253-45b6-9266-017189dbb6fe
-# ╠═361e0948-d91a-11ec-2d95-2db77435a0c1
+# ╟─c97a0002-2253-45b6-9266-017189dbb6fe
+# ╟─361e0948-d91a-11ec-2d95-2db77435a0c1
 # ╟─15136fd8-f9b2-4841-9a95-9de7b8969687
 # ╠═f6e86958-e96f-4c77-91fc-c72d8967575c
 # ╠═24f76360-8599-46c8-a49f-4c31f02eb7d8
 # ╠═5d5e5152-c860-4158-8bc7-67ee1022f9f8
 # ╠═33163dd2-cb35-45c7-ae5b-d4854d141773
 # ╠═a8d6a133-a828-4d51-83c4-fb44f9d5ede1
-# ╠═3b3e0a79-264b-47d7-8bda-2a6db7290828
-# ╠═7f7750ff-b7fa-4fe2-a5a8-6c9c26c479bb
+# ╟─3b3e0a79-264b-47d7-8bda-2a6db7290828
+# ╟─7f7750ff-b7fa-4fe2-a5a8-6c9c26c479bb
 # ╠═936c09f6-ee62-4bc2-a0c6-749a66080fd2
 # ╟─2c6ccfdd-cf11-415b-b398-95e5b0b2bbd4
 # ╠═519477b2-8323-4ece-a7eb-141e9841117c

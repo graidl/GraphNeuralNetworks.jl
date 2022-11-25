@@ -1,5 +1,12 @@
 ### A Pluto.jl notebook ###
-# v0.19.5
+# v0.19.13
+
+#> [frontmatter]
+#> author = "[Carlo Lucibello](https://github.com/CarloLucibello)"
+#> title = "Hands-on introduction to Graph Neural Networks"
+#> date = "2022-05-22"
+#> description = "A beginner level introduction to graph machine learning using GraphNeuralNetworks.jl"
+#> cover = "assets/intro_1.png"
 
 using Markdown
 using InteractiveUtils
@@ -10,13 +17,13 @@ begin
     using Pkg
     Pkg.activate(; temp=true)
     packages = [
-        PackageSpec(; path=joinpath(@__DIR__,"..","..","..")),
+        PackageSpec(; name="GraphNeuralNetworks", version="0.4"),
         PackageSpec(; name="Flux", version="0.13"),
-		PackageSpec(; name="MLDatasets", version="0.7"),
-		PackageSpec(; name="GraphMakie"),
-		PackageSpec(; name="Graphs"),
-		PackageSpec(; name="CairoMakie"),
-		PackageSpec(; name="PlutoUI"),
+        PackageSpec(; name="MLDatasets", version="0.7"),
+        PackageSpec(; name="GraphMakie"),
+        PackageSpec(; name="Graphs"),
+        PackageSpec(; name="CairoMakie"),
+        PackageSpec(; name="PlutoUI"),
     ]
     Pkg.add(packages)
 end
@@ -38,9 +45,7 @@ end;
 
 # ╔═╡ 03a9e023-e682-4ea3-a10b-14c4d101b291
 md"""
-# Introduction: Hands-on Graph Neural Networks
-
-*This Pluto noteboook is a julia adaptation of the Pytorch Geometric tutorials that can be found [here](https://pytorch-geometric.readthedocs.io/en/latest/notes/colabs.html).*
+*This Pluto notebook is a julia adaptation of the Pytorch Geometric tutorials that can be found [here](https://pytorch-geometric.readthedocs.io/en/latest/notes/colabs.html).*
 
 Recently, deep learning on graphs has emerged to one of the hottest research fields in the deep learning community.
 Here, **Graph Neural Networks (GNNs)** aim to generalize classical deep learning concepts to irregular structured data (in contrast to images or texts) and to enable neural networks to reason about objects and their relations.
@@ -52,7 +57,7 @@ This is done by following a simple **neural message passing scheme**, where node
 ```
 
 This tutorial will introduce you to some fundamental concepts regarding deep learning on graphs via Graph Neural Networks based on the **[GraphNeuralNetworks.jl library](https://github.com/CarloLucibello/GraphNeuralNetworks.jl)**.
-GNN.jl is an extension library to the popular deep learning framework [Flux.jl](https://fluxml.ai/Flux.jl/stable/), and consists of various methods and utilities to ease the implementation of Graph Neural Networks.
+GraphNeuralNetworks.jl is an extension library to the popular deep learning framework [Flux.jl](https://fluxml.ai/Flux.jl/stable/), and consists of various methods and utilities to ease the implementation of Graph Neural Networks.
 
 Let's first import the packages we need:
 """
@@ -61,7 +66,7 @@ Let's first import the packages we need:
 md"""
 Following [Kipf et al. (2017)](https://arxiv.org/abs/1609.02907), let's dive into the world of GNNs by looking at a simple graph-structured example, the well-known [**Zachary's karate club network**](https://en.wikipedia.org/wiki/Zachary%27s_karate_club). This graph describes a social network of 34 members of a karate club and documents links between members who interacted outside the club. Here, we are interested in detecting communities that arise from the member's interaction.
 
-GNN.jl provides utilities to convert [MLDatasets.jl](https://github.com/JuliaML/MLDatasets.jl)'s datasets to its own type:
+GraphNeuralNetworks.jl provides utilities to convert [MLDatasets.jl](https://github.com/JuliaML/MLDatasets.jl)'s datasets to its own type:
 """
 
 # ╔═╡ 4ba372d4-7a6a-41e0-92a0-9547a78e2898
@@ -124,7 +129,7 @@ end
 
 # ╔═╡ 1e362709-a0d0-45d5-b2fd-a91c45fa317a
 md"""
-Each graph in GNN.jl is represented by a  `GNNGraph` object, which holds all the information to describe its graph representation.
+Each graph in GraphNeuralNetworks.jl is represented by a  `GNNGraph` object, which holds all the information to describe its graph representation.
 We can print the data object anytime via `print(g)` to receive a short summary about its attributes and their shapes.
 
 The  `g` object holds 3 attributes:
@@ -135,7 +140,7 @@ The  `g` object holds 3 attributes:
 These attributes are `NamedTuples` that can store multiple feature arrays: we can access a specific set of features e.g. `x`, with `g.ndata.x`.
 
 
-In our task, `g.ndata.train_mask` describes for which nodes we already know their community assigments. In total, we are only aware of the ground-truth labels of 4 nodes (one for each community), and the task is to infer the community assignment for the remaining nodes.
+In our task, `g.ndata.train_mask` describes for which nodes we already know their community assignments. In total, we are only aware of the ground-truth labels of 4 nodes (one for each community), and the task is to infer the community assignment for the remaining nodes.
 
 The `g` object also provides some **utility functions** to infer some basic properties of the underlying graph.
 For example, we can easily infer whether there exists isolated nodes in the graph (*i.e.* there exists no edge to any node), whether the graph contains self-loops (*i.e.*, ``(v, v) \in \mathcal{E}``), or whether the graph is bidirected (*i.e.*, for each edge ``(v, w) \in \mathcal{E}`` there also exists the edge ``(w, v) \in \mathcal{E}``).
@@ -149,13 +154,13 @@ edge_index(g)
 
 # ╔═╡ 98bb86d2-a7b9-4110-8851-8829a9f9b4d0
 md"""
-By printing `edge_index(g)`, we can understand how GNN.jl represents graph connectivity internally.
+By printing `edge_index(g)`, we can understand how GraphNeuralNetworks.jl represents graph connectivity internally.
 We can see that for each edge, `edge_index` holds a tuple of two node indices, where the first value describes the node index of the source node and the second value describes the node index of the destination node of an edge.
 
 This representation is known as the **COO format (coordinate format)** commonly used for representing sparse matrices.
-Instead of holding the adjacency information in a dense representation ``\mathbf{A} \in \{ 0, 1 \}^{|\mathcal{V}| \times |\mathcal{V}|}``, GNN.jl represents graphs sparsely, which refers to only holding the coordinates/values for which entries in ``\mathbf{A}`` are non-zero.
+Instead of holding the adjacency information in a dense representation ``\mathbf{A} \in \{ 0, 1 \}^{|\mathcal{V}| \times |\mathcal{V}|}``, GraphNeuralNetworks.jl represents graphs sparsely, which refers to only holding the coordinates/values for which entries in ``\mathbf{A}`` are non-zero.
 
-Importantly, GNN.jl does not distinguish between directed and undirected graphs, and treats undirected graphs as a special case of directed graphs in which reverse edges exist for every entry in the edge_index.
+Importantly, GraphNeuralNetworks.jl does not distinguish between directed and undirected graphs, and treats undirected graphs as a special case of directed graphs in which reverse edges exist for every entry in the edge_index.
 
 Since a `GNNGraph` is an `AbstractGraph` from the `Graphs.jl` library, it supports graph algorithms and visualization tools from the wider julia graph ecosystem:
 """
@@ -168,7 +173,7 @@ md"""
 
 ## Implementing Graph Neural Networks
 
-After learning about GNN.jl's data handling, it's time to implement our first Graph Neural Network!
+After learning about GraphNeuralNetworks.jl's data handling, it's time to implement our first Graph Neural Network!
 
 For this, we will use on of the most simple GNN operators, the **GCN layer** ([Kipf et al. (2017)](https://arxiv.org/abs/1609.02907)), which is defined as
 
@@ -178,7 +183,7 @@ For this, we will use on of the most simple GNN operators, the **GCN layer** ([K
 
 where ``\mathbf{W}^{(\ell + 1)}`` denotes a trainable weight matrix of shape `[num_output_features, num_input_features]` and ``c_{w,v}`` refers to a fixed normalization coefficient for each edge.
 
-GNN.jl implements this layer via `GCNConv`, which can be executed by passing in the node feature representation `x` and the COO graph connectivity representation `edge_index`.
+GraphNeuralNetworks.jl implements this layer via `GCNConv`, which can be executed by passing in the node feature representation `x` and the COO graph connectivity representation `edge_index`.
 
 With this, we are ready to create our first Graph Neural Network by defining our network architecture:
 """
@@ -262,13 +267,13 @@ This leads to the conclusion that GNNs introduce a strong inductive bias, leadin
 
 But can we do better? Let's look at an example on how to train our network parameters based on the knowledge of the community assignments of 4 nodes in the graph (one for each community):
 
-Since everything in our model is differentiable and parameterized, we can add some labels, train the model and observse how the embeddings react.
+Since everything in our model is differentiable and parameterized, we can add some labels, train the model and observe how the embeddings react.
 Here, we make use of a semi-supervised or transductive learning procedure: We simply train against one node per class, but are allowed to make use of the complete input graph data.
 
 Training our model is very similar to any other Flux model.
 In addition to defining our network architecture, we define a loss criterion (here, `logitcrossentropy` and initialize a stochastic gradient optimizer (here, `Adam`).
 After that, we perform multiple rounds of optimization, where each round consists of a forward and backward pass to compute the gradients of our model parameters w.r.t. to the loss derived from the forward pass.
-If you are not new to Flux, this scheme should appear familar to you. 
+If you are not new to Flux, this scheme should appear familiar to you. 
 
 Note that our semi-supervised learning scenario is achieved by the following line:
 ```
@@ -277,7 +282,7 @@ loss = logitcrossentropy(ŷ[:,train_mask], y[:,train_mask])
 While we compute node embeddings for all of our nodes, we **only make use of the training nodes for computing the loss**.
 Here, this is implemented by filtering the output of the classifier `out` and ground-truth labels `data.y` to only contain the nodes in the `train_mask`.
 
-Let us now start training and see how our node embeddings evolve over time (best experienced by explicitely running the code):
+Let us now start training and see how our node embeddings evolve over time (best experienced by explicitly running the code):
 """
 
 

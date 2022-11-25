@@ -11,7 +11,6 @@ using NNlib, NNlibCUDA
 using NNlib: scatter, gather
 using ChainRulesCore
 using Reexport
-
 using SparseArrays, Graphs # not needed but if removed Documenter will complain
 
 include("GNNGraphs/GNNGraphs.jl")
@@ -36,6 +35,8 @@ export
     copy_xj,
     copy_xi,
     xi_dot_xj,
+    xi_sub_xj,
+    xj_sub_xi,
     e_mul_xj,
     w_mul_xj,
 
@@ -50,17 +51,18 @@ export
     CGConv,
     ChebConv,
     EdgeConv,
+    EGNNConv,
     GATConv,
     GATv2Conv,
     GatedGraphConv,
     GCNConv,
     GINConv,
+    GMMConv,
     GraphConv,
     MEGNetConv, 
     NNConv,
     ResGatedGraphConv,
     SAGEConv,
-    GMMConv,
     SGConv,
     MHAConv,
     MHAv2Conv,
