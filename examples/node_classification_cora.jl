@@ -94,8 +94,9 @@ function mha()
              1 0 1 0
              0 1 0 1
              1 0 1 0]
-    in_channel = 2
-    out_channel = 1
+    in_channel = 1
+    @show in_channel
+    out_channel = 3
     dh = 4
     heads = 2
     g = GNNGraph(adj1, ndata=rand(Float32, in_channel, N), graph_type=:sparse)
@@ -118,44 +119,52 @@ end
 
 struct MHA2GNN
     dense1
-    mha2conv
+    MHAv2Conv
     dense2
 end
 
-function MHA2GNN(din, dein, dout, dh, heads)
-    MHA2GNN(Dense(din => dh), MHA2Conv((din, dein) => dout), Dense(dout => dout))
+function MHA2GNN(in, ein, out, dh, heads)
+    MHA2GNN(Dense(in => dh), MHAv2Conv(in, ein, heads), Dense(in => out))
 end
 
 function (model::MHA2GNN)(g::GNNGraph, x, e)
     x = model.dense1(x)
-    x = model.mha2conv(g, x, e)
+    x = model.MHAv2Conv(g, x, e)
     x = model.dense2(x)
 end
 
 Flux.@functor MHA2GNN
 
 function mha2()
-    N = 4
-    adj1 =  [0 1 0 1
+    adj =  [ 0 1 1 1
              1 0 1 0
              0 1 0 1
              1 0 1 0]
-    Ne = sum(adj1)
+    adj = [0;;]
+    adj = [0 0 0 1
+           0 0 0 0
+           0 0 0 1
+           1 0 1 0]
+    N = size(adj, 1)
+    Ne = sum(adj)
     
     in_channel = 2
-    ein_channel = 2
-    out_channel = 1
+    ein_channel = 1
+    out_channel = 7
     dh = 4
     heads = 2
-    g = GNNGraph(adj1, ndata=rand(Float32, in_channel, N), 
+    @show N, Ne, in_channel, ein_channel, out_channel
+    
+    g = GNNGraph(adj, ndata=rand(Float32, in_channel, N), 
             edata=rand(Float32, ein_channel, Ne), 
             graph_type=:sparse)
+
     x = node_features(g)
     e = edge_features(g)
 
-    layer = MHA2Conv((in_channel, ein_channel) => out_channel, heads)
+    # layer = MHAv2Conv(in_channel, ein_channel, heads)
     # println(layer)
-    # y = layer(g, x)
+    # y = layer(g, 
 
     model = GNNChain(Dense(in_channel => dh),
         TransConv(dh, heads),
@@ -168,7 +177,6 @@ function mha2()
     # y = model(g, x)
     # @show y
 end
-
 
 end  # module
 

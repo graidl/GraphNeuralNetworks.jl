@@ -63,7 +63,7 @@ export
     GMMConv,
     SGConv,
     MHAConv,
-    MHA2Conv,
+    MHAv2Conv,
     TransConv,
     
     # layers/pool
