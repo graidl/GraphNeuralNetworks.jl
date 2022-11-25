@@ -1533,26 +1533,22 @@ function (l::MHAConv)(g::GNNGraph, x::AbstractMatrix)
     Kx = reshape(Kx, dk, heads, :)
     Vx = reshape(Vx, dk, heads, :)
 
-    sqrt_dk = l.sqrt_dk
-    
-    function message(xi, xj, e) 
-        uij = sum(xi.Qx .* xj.Kx, dims=1) ./ sqrt_dk
-        exp_uij = exp.(uij)
-        exp_uij_Vx = exp_uij .* xj.Vx
-        # @show exp_uij xj.Vx exp_uij_Vx
-        return (; exp_uij, exp_uij_Vx)
-    end
-
-    m = propagate(message, g, +; xi=(; Qx, Vx), xj=(; Kx, Vx))
+    m = propagate(message, g, +, l; xi=(; Qx, Vx), xj=(; Kx, Vx))
     h = m.exp_uij_Vx ./ m.exp_uij
-    # @show m.exp_uij_Vx m.exp_uij h
     h = reshape(h, dk * heads, :)  # concatenate heads
     Oh = l.O * h
-    # @show Oh
     return Oh
 end
 
 (l::MHAConv)(g::GNNGraph) = GNNGraph(g, ndata=l(g, node_features(g)))
+
+function message(l::MHAConv, xi, xj, e) 
+    sqrt_dk = l.sqrt_dk
+    uij = sum(xi.Qx .* xj.Kx, dims=1) ./ sqrt_dk
+    exp_uij = exp.(uij)
+    exp_uij_Vx = exp_uij .* xj.Vx
+    return (; exp_uij, exp_uij_Vx)
+end
 
 function Base.show(io::IO, l::MHAConv)
     in, out = size(l.O)
@@ -1640,25 +1636,13 @@ function (l::MHAv2Conv)(g::GNNGraph, x::AbstractMatrix, e::AbstractMatrix)
 
     dk = l.dk
     heads = l.heads
-    sqrt_dk = l.sqrt_dk
     W1x = reshape(l.W1 * x, dk, heads, :)
     W2x = reshape(l.W2 * x, dk, heads, :)
     W3x = reshape(l.W3 * x, dk, heads, :)
     W4x = reshape(l.W4 * x, dk, heads, :)
     W6e = reshape(l.W6 * e, dk, heads, :)
 
-    function message(xi, xj, e) 
-        uij = sum(xi.W3x .* (xj.W4x + e.W6e), dims=1) ./ sqrt_dk
-        exp_uij = exp.(uij)
-        exp_uij_W2xW6e = exp_uij .* (xj.W2x + e.W6e)
-        return (; exp_uij, exp_uij_W2xW6e)
-    end
-
-    # aggregate_neighbors
-
-    em = apply_edges(message, g, xi=(; W3x), xj=(; W2x, W4x), e=(; W6e))
-
-    m = propagate(message, g, +; xi=(; W3x), xj=(; W2x, W4x), e=(; W6e))
+    m = propagate(message, g, +, l; xi=(; W3x), xj=(; W2x, W4x), e=(; W6e))
     αW2xW6e = m.exp_uij_W2xW6e ./ (m.exp_uij .+ typemin(Float32))
     h = W1x + αW2xW6e
     h = reshape(h, dk * heads, :)  # concatenate heads
@@ -1667,7 +1651,15 @@ end
 
 (l::MHAv2Conv)(g::GNNGraph) = GNNGraph(g, ndata=l(g, node_features(g), edge_features(g)))
 
-function Base.show(io::IO, l::MHAConv)
+function message(l::MHAv2Conv, xi, xj, e) 
+    sqrt_dk = l.sqrt_dk
+    uij = sum(xi.W3x .* (xj.W4x + e.W6e), dims=1) ./ sqrt_dk
+    exp_uij = exp.(uij)
+    exp_uij_W2xW6e = exp_uij .* (xj.W2x + e.W6e)
+    return (; exp_uij, exp_uij_W2xW6e)
+end
+
+function Base.show(io::IO, l::MHAv2Conv)
     in, ein = size(l.W6)
     print(io, "MHAv2Conv($in, $ein, $(l.heads))")
 end

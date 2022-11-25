@@ -154,28 +154,34 @@ function mha2()
     dh = 4
     heads = 2
     @show N, Ne, in_channel, ein_channel, out_channel
+
     
     g = GNNGraph(adj, ndata=rand(Float32, in_channel, N), 
-            edata=rand(Float32, ein_channel, Ne), 
-            graph_type=:sparse)
-
+        # edata=rand(Float32, ein_channel, Ne), 
+        graph_type=:sparse)
     x = node_features(g)
-    e = edge_features(g)
-
-    # layer = MHAv2Conv(in_channel, ein_channel, heads)
-    # println(layer)
-    # y = layer(g, 
-
     model = GNNChain(Dense(in_channel => dh),
         TransConv(dh, heads),
         TransConv(dh, heads),
         Dense(dh => out_channel))
-    model2 = MHA2GNN(in_channel, ein_channel, 2, 2, 1)
-    y = model2(g, x, e)
+    y = model(g, x)
     @show y
 
-    # y = model(g, x)
-    # @show y
+
+    ge = GNNGraph(adj, ndata=rand(Float32, in_channel, N), 
+            edata=rand(Float32, ein_channel, Ne), 
+            graph_type=:sparse)
+    xe = node_features(ge)
+    ee = edge_features(ge)
+
+    # layer = MHAv2Conv(in_channel, ein_channel, heads)
+    # println(layer)
+    # y = layer(ge, 
+
+    model2 = MHA2GNN(in_channel, ein_channel, 2, 2, 1)
+    y = model2(ge, xe, ee)
+    @show y
+
 end
 
 end  # module
