@@ -1557,7 +1557,8 @@ end
 
 
 @doc raw"""
-    MHAv2Conv(in, ein, heads=8; init=glorot_uniform, add_self_loops=false)
+    MHAv2Conv((in, ein) => out; heads=1, concat=true, init=glorot_uniform,
+        add_self_loops=false, bias=true, root_weight=true)
 
 The transformer-like multi head attention convolutional operator from the 
 [Masked Label Prediction: Unified Message Passing Model for Semi-Supervised 
@@ -1574,94 +1575,111 @@ where the attention scores are
 W_6e_{ij})}{\sqrt{d}}\right)
 ```
 
-TODO:
-- edge features optional
-- biases, turn to Dense
-- inner depth parameter
-- dropout
-- root_weight
-
 # Arguments 
 
 - `in`: Dimension of input features, which also corresponds to the dimension of 
     the output features
 - `ein`: Dimension of the edge features or `nothing`
 - `heads`: Number of heads in input as well as output
+- `concat`: Concatenate layer output or not. If not, layer output is averaged over the heads. Default `true`.
 - `init`: Weight matrices' initializing function
 - `add_self_loops`: Add self loops to the input graph
-
+- `bias`: If set to false, the layer will not learn an additive bias
+- `root_weight`: If set to false, the layer will not add the transformed root node features
+    to the output
 """
-struct MHAv2Conv{TW1<:AbstractMatrix, TW2<:AbstractMatrix, TW3<:AbstractMatrix,
-        TW4<:AbstractMatrix, TW6<:AbstractMatrix} <: GNNLayer
+struct MHAv2Conv{TW1, TW2, TW3, TW4, TW6} <: GNNLayer
     W1::TW1
     W2::TW2
     W3::TW3
     W4::TW4
     W6::TW6
-    dk::Int
+    channels::Pair{NTuple{2,Int},Int}
     heads::Int
     add_self_loops::Bool
-    sqrt_dk::Float32
+    concat::Bool
+    sqrt_out::Float32
 end
 
 @functor MHAv2Conv
+
 Flux.trainable(l::MHAv2Conv) = (l.W1, l.W2, l.W3, l.W4, l.W6)
 
-# MHAv2Conv(ch::Pair{Int,Int}, args...; kws...) = MHAv2Conv((ch[1], 0) => ch[2], args...; kws...)
+MHAv2Conv(ch::Pair{Int,Int}, args...; kws...) = MHAv2Conv((ch[1], 0) => ch[2], args...; kws...)
 
-function MHAv2Conv(in::Int64, ein::Int64, heads::Int=8; init=glorot_uniform,
-        add_self_loops::Bool=false)
+function MHAv2Conv(ch::Pair{NTuple{2, Int}, Int}; 
+    heads::Int=1, concat::Bool=true, init=glorot_uniform, add_self_loops::Bool=false, 
+    bias::Bool=true, root_weight::Bool=true)
+
+    (in, ein), out = ch
 
     if add_self_loops
-        @assert ein == 0 "Using edge features and setting add_self_loops=true at the same time is not yet supported."
+        @assert iszero(ein) "Using edge features and setting add_self_loops=true at the \
+            same time is not yet supported."
     end
 
-    dk = in ÷ heads
-    @assert dk * heads == in
-    # dense_i = Dense(in, out*heads; bias=bias, init=init)
-    W1 = init(in, in)
-    W2 = init(in, in)
-    W3 = init(in, in)
-    W4 = init(in, in)
-    W6 = init(in, ein)
-    return MHAv2Conv(W1, W2, W3, W4, W6, dk, heads, add_self_loops, Float32(√dk))
+    W1 = root_weight ? Dense(in, out * (concat ? heads : 1); bias=bias, init=init) : nothing
+    W2 = Dense(in, out*heads; bias=true, init=init)
+    W3 = Dense(in, out*heads; bias=true, init=init)
+    W4 = Dense(in, out*heads; bias=true, init=init)
+    W6 = ein > 0 ? Dense(ein, out*heads; bias=false, init=init) : nothing
+
+    return MHAv2Conv(W1, W2, W3, W4, W6, ch, heads, add_self_loops, concat, Float32(√out))
 end
 
-function (l::MHAv2Conv)(g::GNNGraph, x::AbstractMatrix, e::AbstractMatrix)
+function (l::MHAv2Conv)(g::GNNGraph, x::AbstractMatrix, 
+        e::Union{AbstractMatrix, Nothing}=nothing)
     check_num_nodes(g, x)
 
     if l.add_self_loops
         g = add_self_loops(g)
     end
 
-    dk = l.dk
+    out = l.channels[2]
     heads = l.heads
-    W1x = reshape(l.W1 * x, dk, heads, :)
-    W2x = reshape(l.W2 * x, dk, heads, :)
-    W3x = reshape(l.W3 * x, dk, heads, :)
-    W4x = reshape(l.W4 * x, dk, heads, :)
-    W6e = reshape(l.W6 * e, dk, heads, :)
+    W1x = !isnothing(l.W1) ? l.W1(x) : nothing
+    W2x = reshape(l.W2(x), out, heads, :)
+    W3x = reshape(l.W3(x), out, heads, :)
+    W4x = reshape(l.W4(x), out, heads, :)
+    W6e = !isnothing(l.W6) ? reshape(l.W6(e), out, heads, :) : nothing
 
     m = propagate(message, g, +, l; xi=(; W3x), xj=(; W2x, W4x), e=(; W6e))
-    αW2xW6e = m.exp_uij_W2xW6e ./ (m.exp_uij .+ typemin(Float32))
-    h = W1x + αW2xW6e
-    h = reshape(h, dk * heads, :)  # concatenate heads
+    α_val = m.exp_uij_val ./ (m.exp_uij .+ floatmin(Float32))
+    h = α_val
+
+    if l.concat
+        h = reshape(h, out * heads, :)  # concatenate heads
+    else
+        h = mean(h, dims=2)  # average heads
+        h = reshape(h, out, :)
+    end
+
+    if !isnothing(W1x)
+        h += W1x
+    end
+
     return h
 end
 
 (l::MHAv2Conv)(g::GNNGraph) = GNNGraph(g, ndata=l(g, node_features(g), edge_features(g)))
 
 function message(l::MHAv2Conv, xi, xj, e) 
-    sqrt_dk = l.sqrt_dk
-    uij = sum(xi.W3x .* (xj.W4x + e.W6e), dims=1) ./ sqrt_dk
+    key = xj.W4x
+    val = xj.W2x
+    if !isnothing(e.W6e)
+        key += e.W6e
+        val += e.W6e
+    end
+    uij = sum(xi.W3x .* key, dims=1) ./ l.sqrt_out
     exp_uij = exp.(uij)
-    exp_uij_W2xW6e = exp_uij .* (xj.W2x + e.W6e)
-    return (; exp_uij, exp_uij_W2xW6e)
+
+    exp_uij_val = exp_uij .* val
+    return (; exp_uij, exp_uij_val)
 end
 
 function Base.show(io::IO, l::MHAv2Conv)
-    in, ein = size(l.W6)
-    print(io, "MHAv2Conv($in, $ein, $(l.heads))")
+    (in, ein), out = l.channels
+    print(io, "MHAv2Conv(($in, $ein) => $out, heads=$(l.heads))")
 end
 
 

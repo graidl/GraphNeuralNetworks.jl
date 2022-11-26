@@ -288,6 +288,20 @@
     #     end
     # end
 
+    # @testset "EGNNConv" begin
+    #     hin = 5
+    #     hout = 5
+    #     hidden = 5
+    #     l = EGNNConv(hin => hout, hidden)
+    #     g = rand_graph(10, 20, graph_type=GRAPH_T)
+    #     x = rand(T, in_channel, g.num_nodes)
+    #     h = randn(T, hin, g.num_nodes)
+    #     hnew, xnew = l(g, h, x)
+    #     @test size(hnew) == (hout, g.num_nodes)
+    #     @test size(xnew) == (in_channel, g.num_nodes)
+    # end
+
+
     @testset "MHAConv" begin
         heads = 1
         l = MHAConv(in_channel => out_channel, heads)
@@ -300,27 +314,21 @@
 
     @testset "MHAv2Conv" begin
         ein = 2
-        heads = 1
-        l = MHAv2Conv(in_channel, ein, heads)
+        heads = 3
+        l = MHAv2Conv((in_channel, ein) => in_channel; heads)
         for g in test_graphs
             g = GNNGraph(g, edata=rand(T, ein, g.num_edges))
             test_layer(l, g, rtol=RTOL_LOW, 
                 exclude_grad_fields = [:negative_slope],
+                outsize=(in_channel * heads, g.num_nodes))
+        end
+        l = MHAv2Conv(in_channel => in_channel; heads, concat=false, bias=false, 
+            root_weight=false)
+        for g in test_graphs
+            test_layer(l, g, rtol=RTOL_LOW, 
+                exclude_grad_fields = [:negative_slope],
                 outsize=(in_channel, g.num_nodes))
         end
-    end
-
-    @testset "EGNNConv" begin
-        hin = 5
-        hout = 5
-        hidden = 5
-        l = EGNNConv(hin => hout, hidden)
-        g = rand_graph(10, 20, graph_type=GRAPH_T)
-        x = rand(T, in_channel, g.num_nodes)
-        h = randn(T, hin, g.num_nodes)
-        hnew, xnew = l(g, h, x)
-        @test size(hnew) == (hout, g.num_nodes)
-        @test size(xnew) == (in_channel, g.num_nodes)
     end
 end
 
