@@ -162,7 +162,7 @@ function mha()
     xe = node_features(ge)
     ee = edge_features(ge)
 
-    layer = MHAv2Conv((in, ein) => out; heads, concat=true, root_weight=false)
+    layer = MHAv2Conv((in, ein) => out; heads, concat=true, root_weight=true, beta=true)
     println(layer)
     y = layer(ge, xe, ee)
     @info "MHAv2Conv" y

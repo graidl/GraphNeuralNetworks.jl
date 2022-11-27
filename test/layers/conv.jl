@@ -315,7 +315,7 @@
     @testset "MHAv2Conv" begin
         ein = 2
         heads = 3
-        l = MHAv2Conv((in_channel, ein) => in_channel; heads)
+        l = MHAv2Conv((in_channel, ein) => in_channel; heads, beta=true)
         for g in test_graphs
             g = GNNGraph(g, edata=rand(T, ein, g.num_edges))
             test_layer(l, g, rtol=RTOL_LOW, 

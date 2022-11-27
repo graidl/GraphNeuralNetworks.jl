@@ -1558,7 +1558,7 @@ end
 
 @doc raw"""
     MHAv2Conv((in, ein) => out; heads=1, concat=true, init=glorot_uniform,
-        add_self_loops=false, bias=true, root_weight=true)
+        add_self_loops=false, bias=true, root_weight=true, beta=false)
 
 The transformer-like multi head attention convolutional operator from the 
 [Masked Label Prediction: Unified Message Passing Model for Semi-Supervised 
@@ -1572,27 +1572,44 @@ x_i' = W_1x_i + \sum_{j\in N(i)} \alpha_{ij} (W_2 x_j + W_6e_{ij})
 where the attention scores are
 ```math
 \alpha_{ij} = \mathrm{softmax}\left(\frac{(W_3x_i)^T(W_4x_j+
-W_6e_{ij})}{\sqrt{d}}\right)
+W_6e_{ij})}{\sqrt{d}}\right).
 ```
+
+Optionally, a combination of the aggregated value with transformed root node features 
+by a gating mechanism via
+```math
+x'_i = \beta_i W_1 x_i + (1 - \beta_i) \underbrace{\left(\sum_{j \in \mathcal{N}(i)}
+\alpha_{i,j} W_2 x_j \right)}_{=m_i}
+```
+with
+```math
+\beta_i = \textrm{sigmoid}(W_5^{\top} [ W_1 x_i, m_i, W_1 x_i - m_i ]).
+```
+can be performed.
 
 # Arguments 
 
 - `in`: Dimension of input features, which also corresponds to the dimension of 
-    the output features
-- `ein`: Dimension of the edge features or `nothing`
-- `heads`: Number of heads in input as well as output
-- `concat`: Concatenate layer output or not. If not, layer output is averaged over the heads. Default `true`.
-- `init`: Weight matrices' initializing function
-- `add_self_loops`: Add self loops to the input graph
-- `bias`: If set to false, the layer will not learn an additive bias
-- `root_weight`: If set to false, the layer will not add the transformed root node features
-    to the output
+    the output features.
+- `ein`: Dimension of the edge features; if 0, no edge features will be used.
+- `heads`: Number of heads in output.
+- `concat`: Concatenate layer output or not. If not, layer output is averaged
+    over the heads.
+- `init`: Weight matrices' initializing function.
+- `add_self_loops`: Add self loops to the input graph.
+- `bias`: If set, the layer will also learn an additive bias.
+- `root_weight`: If set, the layer will add the transformed root node features
+    to the output.
+- `beta`: If set, will combine aggregation and transformed root node features by
+    gating mechanism.
+
 """
-struct MHAv2Conv{TW1, TW2, TW3, TW4, TW6} <: GNNLayer
+struct MHAv2Conv{TW1, TW2, TW3, TW4, TW5, TW6} <: GNNLayer
     W1::TW1
     W2::TW2
     W3::TW3
     W4::TW4
+    W5::TW5
     W6::TW6
     channels::Pair{NTuple{2,Int},Int}
     heads::Int
@@ -1603,13 +1620,13 @@ end
 
 @functor MHAv2Conv
 
-Flux.trainable(l::MHAv2Conv) = (l.W1, l.W2, l.W3, l.W4, l.W6)
+Flux.trainable(l::MHAv2Conv) = (l.W1, l.W2, l.W3, l.W4, l.W5, l.W6)
 
 MHAv2Conv(ch::Pair{Int,Int}, args...; kws...) = MHAv2Conv((ch[1], 0) => ch[2], args...; kws...)
 
 function MHAv2Conv(ch::Pair{NTuple{2, Int}, Int}; 
     heads::Int=1, concat::Bool=true, init=glorot_uniform, add_self_loops::Bool=false, 
-    bias::Bool=true, root_weight::Bool=true)
+    bias::Bool=true, root_weight::Bool=true, beta::Bool=false)
 
     (in, ein), out = ch
 
@@ -1619,12 +1636,15 @@ function MHAv2Conv(ch::Pair{NTuple{2, Int}, Int};
     end
 
     W1 = root_weight ? Dense(in, out * (concat ? heads : 1); bias=bias, init=init) : nothing
-    W2 = Dense(in, out*heads; bias=true, init=init)
-    W3 = Dense(in, out*heads; bias=true, init=init)
-    W4 = Dense(in, out*heads; bias=true, init=init)
-    W6 = ein > 0 ? Dense(ein, out*heads; bias=false, init=init) : nothing
+    W2 = Dense(in => out*heads; bias=true, init=init)
+    W3 = Dense(in => out*heads; bias=true, init=init)
+    W4 = Dense(in => out*heads; bias=true, init=init)
+    W5 = beta ? Dense(3 * out * (concat ? heads : 1) => 1, sigmoid; bias=false, init=init) :
+        nothing
+    W6 = ein > 0 ? Dense(ein => out*heads; bias=false, init=init) : nothing
 
-    return MHAv2Conv(W1, W2, W3, W4, W6, ch, heads, add_self_loops, concat, Float32(√out))
+    return MHAv2Conv(W1, W2, W3, W4, W5, W6,
+        ch, heads, add_self_loops, concat, Float32(√out))
 end
 
 function (l::MHAv2Conv)(g::GNNGraph, x::AbstractMatrix, 
@@ -1654,8 +1674,13 @@ function (l::MHAv2Conv)(g::GNNGraph, x::AbstractMatrix,
         h = reshape(h, out, :)
     end
 
-    if !isnothing(W1x)
-        h += W1x
+    if !isnothing(W1x)  # root_weight
+        if !isnothing(l.W5)  # beta
+            beta = l.W5(vcat(h, W1x, h - W1x))
+            h = beta .* W1x + (1f0 .- beta) .* h
+        else
+            h += W1x
+        end
     end
 
     return h
