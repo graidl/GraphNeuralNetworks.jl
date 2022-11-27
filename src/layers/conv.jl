@@ -1558,12 +1558,16 @@ end
 
 @doc raw"""
     MHAv2Conv((in, ein) => out; heads=1, concat=true, init=glorot_uniform,
-        add_self_loops=false, bias=true, root_weight=true, beta=false)
+        add_self_loops=false, bias_qkv=false, bias_root=true, root_weight=true, beta=false)
 
 The transformer-like multi head attention convolutional operator from the 
 [Masked Label Prediction: Unified Message Passing Model for Semi-Supervised 
 Classification](https://arxiv.org/abs/2009.03509) paper, which also considers 
 edge features.
+It further contains options to also be configured as the transformer-like multi head 
+attention convolutional operator from the 
+[Attention, Learn to Solve Routing Problems!](https://arxiv.org/abs/1706.03762) paper,
+including a successiv feed-forward network as well as skip layers and batch normalization.
 
 The layer's forward pass is given by
 ```math
@@ -1597,36 +1601,49 @@ can be performed.
     over the heads.
 - `init`: Weight matrices' initializing function.
 - `add_self_loops`: Add self loops to the input graph.
-- `bias`: If set, the layer will also learn an additive bias.
+- `bias_qkv`: If set, bias is used in the key, query and value transformations for nodes.  
+- `bias_root`: If set, the layer will also learn an additive bias for the root when root 
+    weight is used.
 - `root_weight`: If set, the layer will add the transformed root node features
     to the output.
 - `beta`: If set, will combine aggregation and transformed root node features by
     gating mechanism.
+- `skip_connection`: If set, a skip connection will be made from the input and 
+    added to the output.
+- `batch_norm`: If set, a batch normalization will be applied to the output.
+- `ff_channels`: If positive, a feed-forward NN is appended, with the first having the given
+    number of hidden nodes; this NN also gets a skip connection and batch normalization 
+    if the respective parameters are set.
 
 """
-struct MHAv2Conv{TW1, TW2, TW3, TW4, TW5, TW6} <: GNNLayer
+struct MHAv2Conv{TW1, TW2, TW3, TW4, TW5, TW6, TFF, TBN1, TBN2} <: GNNLayer
     W1::TW1
     W2::TW2
     W3::TW3
     W4::TW4
     W5::TW5
     W6::TW6
+    FF::TFF
+    BN1::TBN1
+    BN2::TBN2
     channels::Pair{NTuple{2,Int},Int}
     heads::Int
     add_self_loops::Bool
     concat::Bool
+    skip_connection::Bool
     sqrt_out::Float32
 end
 
 @functor MHAv2Conv
 
-Flux.trainable(l::MHAv2Conv) = (l.W1, l.W2, l.W3, l.W4, l.W5, l.W6)
+Flux.trainable(l::MHAv2Conv) = (l.W1, l.W2, l.W3, l.W4, l.W5, l.W6, l.FF, l.BN1, l.BN2)
 
 MHAv2Conv(ch::Pair{Int,Int}, args...; kws...) = MHAv2Conv((ch[1], 0) => ch[2], args...; kws...)
 
 function MHAv2Conv(ch::Pair{NTuple{2, Int}, Int}; 
     heads::Int=1, concat::Bool=true, init=glorot_uniform, add_self_loops::Bool=false, 
-    bias::Bool=true, root_weight::Bool=true, beta::Bool=false)
+    bias_qkv=true, bias_root::Bool=true, root_weight::Bool=true, beta::Bool=false, 
+    skip_connection::Bool=false, batch_norm::Bool=false, ff_channels::Int=0)
 
     (in, ein), out = ch
 
@@ -1635,16 +1652,22 @@ function MHAv2Conv(ch::Pair{NTuple{2, Int}, Int};
             same time is not yet supported."
     end
 
-    W1 = root_weight ? Dense(in, out * (concat ? heads : 1); bias=bias, init=init) : nothing
-    W2 = Dense(in => out*heads; bias=true, init=init)
-    W3 = Dense(in => out*heads; bias=true, init=init)
-    W4 = Dense(in => out*heads; bias=true, init=init)
-    W5 = beta ? Dense(3 * out * (concat ? heads : 1) => 1, sigmoid; bias=false, init=init) :
-        nothing
-    W6 = ein > 0 ? Dense(ein => out*heads; bias=false, init=init) : nothing
+    W1 = root_weight ? Dense(in, out * (concat ? heads : 1); bias=bias_root, init=init) : nothing
+    W2 = Dense(in => out*heads; bias=bias_qkv, init=init)
+    W3 = Dense(in => out*heads; bias=bias_qkv, init=init)
+    W4 = Dense(in => out*heads; bias=bias_qkv, init=init)
+    out_mha = out * (concat ? heads : 1)
+    W5 = beta ? Dense(3 * out_mha => 1, sigmoid; bias=false, init=init) : nothing
+    W6 = ein > 0 ? Dense(ein => out*heads; bias=bias_qkv, init=init) : nothing
+    FF = ff_channels > 0 ? Chain(
+            Dense(out_mha => ff_channels, relu), 
+            Dense(ff_channels => out_mha)
+        ) : nothing
+    BN1 = batch_norm ? BatchNorm(out_mha) : nothing
+    BN2 = (batch_norm && ff_channels > 0) ? BatchNorm(out_mha) : nothing
 
-    return MHAv2Conv(W1, W2, W3, W4, W5, W6,
-        ch, heads, add_self_loops, concat, Float32(√out))
+    return MHAv2Conv(W1, W2, W3, W4, W5, W6, FF, BN1, BN2,
+        ch, heads, add_self_loops, concat, skip_connection, Float32(√out))
 end
 
 function (l::MHAv2Conv)(g::GNNGraph, x::AbstractMatrix, 
@@ -1680,6 +1703,26 @@ function (l::MHAv2Conv)(g::GNNGraph, x::AbstractMatrix,
             h = beta .* W1x + (1f0 .- beta) .* h
         else
             h += W1x
+        end
+    end
+
+    if l.skip_connection
+        @assert size(h, 1) == size(x, 1) "In-channels must correspond to \
+            out-channels * heads if concat is used"
+        h += x
+    end
+    if !isnothing(l.BN1)
+        h = l.BN1(h)
+    end
+
+    if !isnothing(l.FF)
+        h1 = h
+        h = l.FF(h) 
+        if l.skip_connection
+            h += h1
+        end
+        if !isnothing(l.BN2)
+            h = l.BN2(h)
         end
     end
 

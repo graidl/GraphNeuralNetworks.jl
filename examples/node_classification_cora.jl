@@ -149,22 +149,26 @@ function mha()
     N = size(adj, 1)
     Ne = sum(adj)
     
-    in = 2
     ein = 3
     out = 2
     dh = 4
     heads = 3
+    in = out * heads
     @show N, Ne, in, ein, out
     
+
+    gg = GNNGraph(adj, ndata=rand(Float32, 2 * heads, size(adj, 1)), graph_type=:sparse)
+
     ge = GNNGraph(adj, ndata=rand(Float32, in, N), 
         edata=rand(Float32, ein, Ne), 
         graph_type=:sparse)
     xe = node_features(ge)
     ee = edge_features(ge)
 
-    layer = MHAv2Conv((in, ein) => out; heads, concat=true, root_weight=true, beta=true)
+    layer = MHAv2Conv((in, 0) => out; heads, concat=true, 
+        add_self_loops=false, root_weight=false, ff_channels=30, skip_connection=true, batch_norm=true)
     println(layer)
-    y = layer(ge, xe, ee)
+    y = layer(ge, xe) #, ee)
     @info "MHAv2Conv" y
 
     model2 = MHA2GNN(in, dh, out, ein, heads)
