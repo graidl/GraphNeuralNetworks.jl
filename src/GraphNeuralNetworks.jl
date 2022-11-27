@@ -65,7 +65,7 @@ export
     SAGEConv,
     SGConv,
     MHAConv,
-    MHAv2Conv,
+    TransformerConv,
     TransConv,
     
     # layers/pool

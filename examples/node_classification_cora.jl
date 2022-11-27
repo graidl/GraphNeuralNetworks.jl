@@ -1,6 +1,6 @@
 # An example of semi-supervised node classification
 
-module Mha
+module Trans
 
 using Flux
 using Flux: onecold, onehotbatch
@@ -88,55 +88,34 @@ function train(; kws...)
     end
 end
 
-function mha1()
-    N = 4
-    adj1 =  [0 1 0 1
-             1 0 1 0
-             0 1 0 1
-             1 0 1 0]
-    in_channel = 1
-    @show in_channel
-    out = 3
-    dh = 4
-    heads = 2
-    g = GNNGraph(adj1, ndata=rand(Float32, in_channel, N), graph_type=:sparse)
-    x = node_features(g)
 
-    layer = MHAConv(in_channel => out_channel, heads)
-    # println(layer)
-    # y = layer(g, x)
-
-    model = GNNChain(Dense(in_channel => dh),
-        TransConv(dh, heads),
-        TransConv(dh, heads),
-        Dense(dh => out))
-    y = model(g, x)
-    @show y
-
-    # y = model(g, x)
-    # @show y
-end
-
-
-struct MHA2GNN
+struct TransformerGNN
     dense1
-    MHAv2Conv
+    conv1
+    conv2
+    conv3
     dense2
 end
 
-function MHA2GNN(in, dh, out, ein, heads)
-    MHA2GNN(Dense(in => dh), MHAv2Conv((dh, ein) => dh; heads), Dense(dh*heads => out))
+function TransformerGNN(in, dh, out, ein, heads)
+    TransformerGNN(Dense(in => dh), 
+        TransformerConv((dh, ein) => dh; heads), 
+        TransformerConv((dh, ein) => dh; heads), 
+        TransformerConv((dh, ein) => dh; heads), 
+        Dense(dh*heads => out))
 end
 
-function (model::MHA2GNN)(g::GNNGraph, x, e)
+function (model::TransformerGNN)(g::GNNGraph, x, e)
     x = model.dense1(x)
-    x = model.MHAv2Conv(g, x, e)
+    x = model.TransformerConv(g, x, e)
+    x = model.TransformerConv(g, x, e)
+    x = model.TransformerConv(g, x, e)
     x = model.dense2(x)
 end
 
-Flux.@functor MHA2GNN
+Flux.@functor TransformerGNN
 
-function mha()
+function trans()
     adj =  [ 0 1 1 1
              1 0 1 0
              0 1 0 1
@@ -157,29 +136,27 @@ function mha()
     @show N, Ne, in, ein, out
     
 
-    gg = GNNGraph(adj, ndata=rand(Float32, 2 * heads, size(adj, 1)), graph_type=:sparse)
-
     ge = GNNGraph(adj, ndata=rand(Float32, in, N), 
         edata=rand(Float32, ein, Ne), 
         graph_type=:sparse)
     xe = node_features(ge)
     ee = edge_features(ge)
 
-    layer = MHAv2Conv((in, 0) => out; heads, concat=true, 
+    layer = TransformerConv((in, 0) => out; heads, concat=true, 
         add_self_loops=false, root_weight=false, ff_channels=30, skip_connection=true, batch_norm=true)
     println(layer)
     y = layer(ge, xe) #, ee)
-    @info "MHAv2Conv" y
+    @info "TransformerConv" y
 
     model2 = MHA2GNN(in, dh, out, ein, heads)
     y = model2(ge, xe, ee)
-    @info "MHA2GNN" y
+    @info "TransformerGNN" y
 
 end
 
 end  # module
 
-Mha.mha();
+Trans.trans();
 
 # train()
 

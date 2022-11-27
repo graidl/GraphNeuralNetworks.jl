@@ -1449,115 +1449,8 @@ function Base.show(io::IO, l::EGNNConv)
 end
 
 
-
 @doc raw"""
-    MHAConv(in => out, heads=8; init=glorot_uniform, add_self_loops=true)
-
-The transformer-like multi head attention convolutional operator from the 
-[Attention, Learn to Solve Routing Problems!](https://arxiv.org/abs/1706.03762) paper.
-Note that [`TransConv`](@ref) extends this basic layer with a feed-forward NN, 
-batch normalization, and skip layers as done in the Transformer.
-
-The layer's forward pass is given by
-```math
-x_i' = O\,\mathrm{cat}(h_1,\ldots,h_M)
-```
-where ``h_k,\ k=1\ldots,h_M`` are the ``M`` heads determined by
-```math
-h_{ki} = \sum_{j\in N(i)} a_{ij} v_j,
-```
-with the attention scores being
-```math
-a_{ij} = \frac{e^{u_{ij}}}{\sum_{j'\in N(i)} e^{u_{ij'}}}
-```
-and
-```math
-u_{ij} = \begin{cases}
-    \frac{q_i^Tk_j}{\sqrt{d_k}} & \text{ if } i \text{ adjacent to } j \\
-    -\infty & \text{ else.}
-\end{cases}
-```
-The query, key, and value vectors are determined from the input vector ``x_i``, as
-```math
-q_i = Q x_i,\quad k_i=K x_i, \quad \text{ and } v_i=V x_i.
-```
-
-# Arguments 
-
-- `in`: Dimension of input features.
-- `out`: Dimension of output features.
-- `heads`: Number of heads
-- `init`: Weight matrices' initializing function. 
-- `add_self_loops`: Add self loops to also do self-attention
-"""
-struct MHAConv{TQ<:AbstractMatrix, TK<:AbstractMatrix, TV<:AbstractMatrix,
-        TO<:AbstractMatrix} <: GNNLayer
-    Q::TQ
-    K::TK
-    V::TV
-    O::TO
-    dk::Int
-    heads::Int
-    add_self_loops::Bool
-    sqrt_dk::Float32
-end
-
-@functor MHAConv
-Flux.trainable(l::MHAConv) = (l.Q, l.K, l.V, l.O)
-
-function MHAConv(ch::Pair{Int, Int}=(128 => 128), heads::Int=8; init=glorot_uniform,
-        add_self_loops::Bool=true)
-    in, out = ch
-    dk = in ÷ heads
-    @assert dk * heads == in
-    Q = init(in, in)
-    K = init(in, in)
-    V = init(in, in)
-    O = init(out, in)
-    return MHAConv(Q, K, V, O, dk, heads, add_self_loops, Float32(√dk))
-end
-
-function (l::MHAConv)(g::GNNGraph, x::AbstractMatrix)
-    check_num_nodes(g, x)
-
-    if l.add_self_loops
-        g = add_self_loops(g)
-    end
-
-    dk = l.dk
-    heads = l.heads
-    Qx = l.Q * x
-    Kx = l.K * x
-    Vx = l.V * x
-    Qx = reshape(Qx, dk, heads, :)
-    Kx = reshape(Kx, dk, heads, :)
-    Vx = reshape(Vx, dk, heads, :)
-
-    m = propagate(message, g, +, l; xi=(; Qx, Vx), xj=(; Kx, Vx))
-    h = m.exp_uij_Vx ./ m.exp_uij
-    h = reshape(h, dk * heads, :)  # concatenate heads
-    Oh = l.O * h
-    return Oh
-end
-
-(l::MHAConv)(g::GNNGraph) = GNNGraph(g, ndata=l(g, node_features(g)))
-
-function message(l::MHAConv, xi, xj, e) 
-    sqrt_dk = l.sqrt_dk
-    uij = sum(xi.Qx .* xj.Kx, dims=1) ./ sqrt_dk
-    exp_uij = exp.(uij)
-    exp_uij_Vx = exp_uij .* xj.Vx
-    return (; exp_uij, exp_uij_Vx)
-end
-
-function Base.show(io::IO, l::MHAConv)
-    in, out = size(l.O)
-    print(io, "MHAConv($in => $out, $(l.heads))")
-end
-
-
-@doc raw"""
-    MHAv2Conv((in, ein) => out; heads=1, concat=true, init=glorot_uniform,
+    TransformerConv((in, ein) => out; heads=1, concat=true, init=glorot_uniform,
         add_self_loops=false, bias_qkv=false, bias_root=true, root_weight=true, beta=false)
 
 The transformer-like multi head attention convolutional operator from the 
@@ -1616,7 +1509,7 @@ can be performed.
     if the respective parameters are set.
 
 """
-struct MHAv2Conv{TW1, TW2, TW3, TW4, TW5, TW6, TFF, TBN1, TBN2} <: GNNLayer
+struct TransformerConv{TW1, TW2, TW3, TW4, TW5, TW6, TFF, TBN1, TBN2} <: GNNLayer
     W1::TW1
     W2::TW2
     W3::TW3
@@ -1634,13 +1527,13 @@ struct MHAv2Conv{TW1, TW2, TW3, TW4, TW5, TW6, TFF, TBN1, TBN2} <: GNNLayer
     sqrt_out::Float32
 end
 
-@functor MHAv2Conv
+@functor TransformerConv
 
-Flux.trainable(l::MHAv2Conv) = (l.W1, l.W2, l.W3, l.W4, l.W5, l.W6, l.FF, l.BN1, l.BN2)
+Flux.trainable(l::TransformerConv) = (l.W1, l.W2, l.W3, l.W4, l.W5, l.W6, l.FF, l.BN1, l.BN2)
 
-MHAv2Conv(ch::Pair{Int,Int}, args...; kws...) = MHAv2Conv((ch[1], 0) => ch[2], args...; kws...)
+TransformerConv(ch::Pair{Int,Int}, args...; kws...) = TransformerConv((ch[1], 0) => ch[2], args...; kws...)
 
-function MHAv2Conv(ch::Pair{NTuple{2, Int}, Int}; 
+function TransformerConv(ch::Pair{NTuple{2, Int}, Int}; 
     heads::Int=1, concat::Bool=true, init=glorot_uniform, add_self_loops::Bool=false, 
     bias_qkv=true, bias_root::Bool=true, root_weight::Bool=true, beta::Bool=false, 
     skip_connection::Bool=false, batch_norm::Bool=false, ff_channels::Int=0)
@@ -1666,11 +1559,11 @@ function MHAv2Conv(ch::Pair{NTuple{2, Int}, Int};
     BN1 = batch_norm ? BatchNorm(out_mha) : nothing
     BN2 = (batch_norm && ff_channels > 0) ? BatchNorm(out_mha) : nothing
 
-    return MHAv2Conv(W1, W2, W3, W4, W5, W6, FF, BN1, BN2,
+    return TransformerConv(W1, W2, W3, W4, W5, W6, FF, BN1, BN2,
         ch, heads, add_self_loops, concat, skip_connection, Float32(√out))
 end
 
-function (l::MHAv2Conv)(g::GNNGraph, x::AbstractMatrix, 
+function (l::TransformerConv)(g::GNNGraph, x::AbstractMatrix, 
         e::Union{AbstractMatrix, Nothing}=nothing)
     check_num_nodes(g, x)
 
@@ -1729,9 +1622,9 @@ function (l::MHAv2Conv)(g::GNNGraph, x::AbstractMatrix,
     return h
 end
 
-(l::MHAv2Conv)(g::GNNGraph) = GNNGraph(g, ndata=l(g, node_features(g), edge_features(g)))
+(l::TransformerConv)(g::GNNGraph) = GNNGraph(g, ndata=l(g, node_features(g), edge_features(g)))
 
-function message(l::MHAv2Conv, xi, xj, e) 
+function message(l::TransformerConv, xi, xj, e) 
     key = xj.W4x
     val = xj.W2x
     if !isnothing(e.W6e)
@@ -1745,61 +1638,8 @@ function message(l::MHAv2Conv, xi, xj, e)
     return (; exp_uij, exp_uij_val)
 end
 
-function Base.show(io::IO, l::MHAv2Conv)
+function Base.show(io::IO, l::TransformerConv)
     (in, ein), out = l.channels
-    print(io, "MHAv2Conv(($in, $ein) => $out, heads=$(l.heads))")
+    print(io, "TransformerConv(($in, $ein) => $out, heads=$(l.heads))")
 end
-
-
-
-
-@doc raw"""
-    TransConv(dh=128, heads=8, dff=512; init=glorot_uniform, add_self_loops=true)
-
-The Transformer-like layer from the [Attention, Learn to Solve Routing 
-Problems!](https://arxiv.org/abs/1706.03762) paper.
-It makes use of the multi head attention convolutional operator [`MHAConv`](@ref) and
-adds a feed-forward NN, batch normalization and skip connections.
-
-The layer's forward pass is given by
-```math
-x_i' = \mathrm{BN}(h_i + \mathrm{FF}(h_i))
-```
-with
-```math
-h_i = \mathrm{BN}(x_i + \mathrm{MHA}(x_i)),
-```
-where BN is a batch normalization layer, MHA is the multi head attention layer, and FF is
-a feed-forward Neural network consisting of one hidden layer of depth `dff`.
-# Arguments
-
-- `dh`: The dimension of input and output features.
-- `heads`: The number of heads used in the multi head attention.
-- `dff`: The number of inner nodes in the feed-forward NN.
-- `init`: Weight matrices' initializing function.
-- `add_self_loops`: Add self loops to also do self-attention.
-"""
-struct TransConv{TT<:GNNChain} <: GNNLayer
-    t::TT
-    dh::Int
-    heads::Int
-    dff::Int
-end
-
-@functor TransConv
-
-function TransConv(dh::Int=128, heads::Int=8, dff=512; init=glorot_uniform,
-        add_self_loops::Bool=true)
-    t = GNNChain(Parallel(+, identity, MHAConv(dh => dh, heads; init, add_self_loops)),
-        SkipConnection(Dense(dh => dh), +),
-        BatchNorm(dh),
-        SkipConnection(Chain(Dense(dh => dff, relu), Dense(dff => dh)), +),
-        BatchNorm(dh))
-    TransConv(t, dh, heads, dff)
-end
-
-(l::TransConv)(g::GNNGraph, x::AbstractMatrix) = l.t(g, x)
-
-Base.show(io::IO, l::TransConv) = print(io, "TransConv($(l.dh), $(l.heads), $(l.dff)")
-
 
