@@ -6,7 +6,6 @@
 *.swo
 Manifest.toml
 /docs/build/
-.vscode
 LocalPreferences.toml
 .DS_Store
 JuliaSysimage.so
