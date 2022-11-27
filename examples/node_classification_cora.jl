@@ -97,19 +97,19 @@ struct TransformerGNN
     dense2
 end
 
-function TransformerGNN(in, dh, out, ein, heads)
-    TransformerGNN(Dense(in => dh), 
-        TransformerConv((dh, ein) => dh; heads), 
-        TransformerConv((dh, ein) => dh; heads), 
-        TransformerConv((dh, ein) => dh; heads), 
+function TransformerGNN(in::Int, dh::Int, out::Int, ein::Int, heads::Int)
+    TransformerGNN(Dense(in => dh*heads), 
+        TransformerConv((dh*heads, ein) => dh; heads), 
+        TransformerConv((dh*heads, ein) => dh; heads), 
+        TransformerConv((dh*heads, ein) => dh; heads), 
         Dense(dh*heads => out))
 end
 
 function (model::TransformerGNN)(g::GNNGraph, x, e)
     x = model.dense1(x)
-    x = model.TransformerConv(g, x, e)
-    x = model.TransformerConv(g, x, e)
-    x = model.TransformerConv(g, x, e)
+    x = model.conv1(g, x, e)
+    x = model.conv2(g, x, e)
+    x = model.conv3(g, x, e)
     x = model.dense2(x)
 end
 
@@ -130,14 +130,13 @@ function trans()
     
     ein = 3
     out = 2
-    dh = 4
+    dh = 6
     heads = 3
     in = out * heads
     @show N, Ne, in, ein, out
     
 
-    ge = GNNGraph(adj, ndata=rand(Float32, in, N), 
-        edata=rand(Float32, ein, Ne), 
+    ge = GNNGraph(adj, ndata=rand(Float32, in, N), edata=rand(Float32, ein, Ne), 
         graph_type=:sparse)
     xe = node_features(ge)
     ee = edge_features(ge)
@@ -148,7 +147,7 @@ function trans()
     y = layer(ge, xe) #, ee)
     @info "TransformerConv" y
 
-    model2 = MHA2GNN(in, dh, out, ein, heads)
+    model2 = TransformerGNN(in, dh, out, ein, heads)
     y = model2(ge, xe, ee)
     @info "TransformerGNN" y
 
