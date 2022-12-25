@@ -1,7 +1,7 @@
 name = "GraphNeuralNetworks"
 uuid = "cffab07f-9bc2-4db1-8861-388f63bf7694"
 authors = ["Carlo Lucibello and contributors"]
-version = "0.5.2"
+version = "0.6.0"
 
 [deps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
@@ -31,12 +31,12 @@ Adapt = "3"
 CUDA = "3.3"
 ChainRulesCore = "1"
 DataStructures = "0.18"
-Flux = "0.13.4"
-Functors = "0.2, 0.3"
+Flux = "0.13.9"
+Functors = "0.4.1"
 Graphs = "1.4"
-KrylovKit = "0.5, 0.6"
-MLDatasets = "0.6, 0.7"
-MLUtils = "0.2.3, 0.3"
+KrylovKit = "0.6"
+MLDatasets = "0.7"
+MLUtils = "0.3"
 MacroTools = "0.5"
 NNlib = "0.8"
 NNlibCUDA = "0.2"
@@ -48,6 +48,7 @@ julia = "1.6"
 [extras]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 ChainRulesTestUtils = "cdddcdb0-9152-4a09-a978-84456f9df70a"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 FiniteDifferences = "26cc04aa-876d-5657-8c51-4c34ba976000"
 InlineStrings = "842dd82b-1e85-43dc-bf29-5d0ee9dffc48"
 MLDatasets = "eb30cadb-4394-5ae3-aed4-317e484a6458"
@@ -55,4 +56,4 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [targets]
-test = ["Test", "Adapt", "InlineStrings", "Zygote", "FiniteDifferences", "ChainRulesTestUtils", "MLDatasets"]
+test = ["Test", "Adapt", "DataFrames", "InlineStrings", "Zygote", "FiniteDifferences", "ChainRulesTestUtils", "MLDatasets"]

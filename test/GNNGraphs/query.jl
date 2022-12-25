@@ -132,6 +132,19 @@
         @test L ≈ D - A
     end
 
+    @testset "laplacian_lambda_max" begin
+        s = [1, 2, 3, 4, 5, 1, 2, 3, 4, 5]
+        t = [2, 3, 4, 5, 1, 5, 1, 2, 3, 4]
+        g = GNNGraph(s,t)
+        @test laplacian_lambda_max(g) ≈ Float32(1.809017)
+        data1 = [g for i in 1:5]
+        gall1 = Flux.batch(data1)
+        @test laplacian_lambda_max(gall1) ≈ [Float32(1.809017) for i in 1:5]
+        data2 = [rand_graph(10,20) for i in 1:3]
+        gall2 = Flux.batch(data2)
+        @test length(laplacian_lambda_max(gall2)) == 3
+    end
+
     @testset "adjacency_matrix" begin
         a = sprand(5, 5, 0.5)
         abin = map(x -> x > 0 ? 1 : 0, a)
@@ -163,6 +176,19 @@
             end[1]
 
             @test gw == [1,1,1]
+        end
+
+        @testset "khop_adj" begin
+            s = [1,2,3]
+            t = [2,3,1]
+            w = [0.1,0.1,0.2]
+            g = GNNGraph(s, t, w)
+            @test khop_adj(g,2)== adjacency_matrix(g)*adjacency_matrix(g)
+            @test khop_adj(g,2,Int8;weighted=false) == sparse([0 0 1;1 0 0;0 1 0])
+            @test khop_adj(g,2,Int8;dir=in,weighted=false) == sparse([0 0 1;1 0 0;0 1 0]')
+            @test khop_adj(g,1) == adjacency_matrix(g)
+            @test eltype(khop_adj(g,4)) == Float64
+            @test eltype(khop_adj(g,10,Float32)) == Float32    
         end
     end
 end

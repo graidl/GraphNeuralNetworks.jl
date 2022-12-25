@@ -47,8 +47,8 @@ julia> target = [2,3,1,3,1,2,4,3];
 
 julia> g = GNNGraph(source, target)
 GNNGraph:
-    num_nodes = 4
-    num_edges = 8
+  num_nodes: 4
+  num_edges: 8
 
 
 julia> @assert g.num_nodes == 4   # number of nodes
@@ -73,25 +73,32 @@ false
 ## Data Features
 
 One or more arrays can be associated to nodes, edges, and (sub)graphs of a `GNNGraph`.
-They will be stored in the fields `g.ndata`, `g.edata`, and `g.gdata` respectivaly.
-The data fields are `NamedTuple`s. The array they contain must have last dimension
-equal to `num_nodes` (in `ndata`), `num_edges` (in `edata`), or `num_graphs` (in `gdata`).
+They will be stored in the fields `g.ndata`, `g.edata`, and `g.gdata` respectively.
+
+The data fields are [`DataStore`](@ref) objects. [`DataStore`](@ref)s conveniently offer an interface similar to both dictionaries and named tuples. Similarly to dictionaries, DataStores support addition of new features after creation time.
+
+The array contained in the datastores have last dimension equal to `num_nodes` (in `ndata`), `num_edges` (in `edata`), or `num_graphs` (in `gdata`) respectively.
 
 ```julia
 # Create a graph with a single feature array `x` associated to nodes
-g = GNNGraph(erdos_renyi(10,  30), ndata = (; x = rand(Float32, 32, 10)))
+g = rand_graph(10,  60, ndata = (; x = rand(Float32, 32, 10)))
 
 g.ndata.x  # access the features
 
 # Equivalent definition passing directly the array
-g = GNNGraph(erdos_renyi(10,  30), ndata = rand(Float32, 32, 10))
+g = rand_graph(10,  60, ndata = rand(Float32, 32, 10))
 
 g.ndata.x  # `:x` is the default name for node features
 
-# You can have multiple feature arrays
-g = GNNGraph(erdos_renyi(10,  30), ndata = (; x=rand(Float32, 32, 10), y=rand(Float32, 10)))
+g.ndata.z = rand(Float32, 3, 10)  # add new feature array `z`
 
-g.ndata.y, g.ndata.x
+# For convenience, we can access the features through the shortcut
+g.x 
+
+# You can have multiple feature arrays
+g = rand_graph(10,  60, ndata = (; x=rand(Float32, 32, 10), y=rand(Float32, 10)))
+
+g.ndata.y, g.ndata.x   # or g.x, g.y
 
 # Attach an array with edge features.
 # Since `GNNGraph`s are directed, the number of edges
@@ -99,7 +106,7 @@ g.ndata.y, g.ndata.x
 g = GNNGraph(erdos_renyi(10,  30), edata = rand(Float32, 60))
 @assert g.num_edges == 60
 
-g.edata.e
+g.edata.e  # or g.e
 
 # If we pass only half of the edge features, they will be copied
 # on the reversed edges.
@@ -110,8 +117,8 @@ g = GNNGraph(erdos_renyi(10,  30), edata = rand(Float32, 30))
 # but replacing node data
 g′ = GNNGraph(g, ndata =(; z = ones(Float32, 16, 10)))
 
-g.ndata.z
-g.edata.e
+g′.z
+g′.e
 ```
 
 ## Edge weights
@@ -128,8 +135,8 @@ julia> weight = [1.0, 0.5, 2.1, 2.3, 4, 4.1];
 
 julia> g = GNNGraph(source, target, weight)
 GNNGraph:
-    num_nodes = 3
-    num_edges = 6
+  num_nodes: 3
+  num_edges: 6
 
 julia> get_edge_weight(g)
 6-element Vector{Float64}:
@@ -149,7 +156,7 @@ and where the original graphs are disjoint subgraphs.
 
 ```julia
 using Flux
-using Flux.Data: DataLoader
+using Flux: DataLoader
 
 data = [rand_graph(10, 30, ndata=rand(Float32, 3, 10)) for _ in 1:160]
 gall = Flux.batch(data)
@@ -186,7 +193,7 @@ an option for mini-batch iteration, the recommended way is
 to pass an array of graphs directly:
 
 ```julia
-using Flux.Data: DataLoader
+using Flux: DataLoader
 
 data = [rand_graph(10, 30, ndata=rand(Float32, 3, 10)) for _ in 1:320]
 
@@ -218,10 +225,10 @@ using Flux: gpu
 g_gpu = g |> gpu
 ```
 
-## JuliaGraphs/Graphs.jl integration
+## Integration with Graphs.jl
 
-Since `GNNGraph <: Graphs.AbstractGraph`, we can use any functionality from Graphs.jl. 
-Moreover, `GNNGraph`s can be constructed from `Graphs.Graph` and `Graphs.DiGraph`.
+Since `GNNGraph <: Graphs.AbstractGraph`, we can use any functionality from [Graphs.jl](https://github.com/JuliaGraphs/Graphs.jl) for querying and analyzing the graph structure. 
+Moreover, a `GNNGraph` can be easily constructed from a `Graphs.Graph` or a `Graphs.DiGraph`:
 
 ```julia
 julia> import Graphs
@@ -234,10 +241,10 @@ julia> gu = Graphs.erdos_renyi(10, 20)
 
 # Since GNNGraphs are undirected, the edges are doubled when converting 
 # to GNNGraph
-julia> GNNGraph(gu)  # Since GNNGraphs are 
+julia> GNNGraph(gu)
 GNNGraph:
-    num_nodes = 10
-    num_edges = 40
+  num_nodes: 10
+  num_edges: 40
 
 # A Graphs.jl directed graph
 julia> gd = Graphs.erdos_renyi(10, 20, is_directed=true)
@@ -245,6 +252,6 @@ julia> gd = Graphs.erdos_renyi(10, 20, is_directed=true)
 
 julia> GNNGraph(gd)
 GNNGraph:
-    num_nodes = 10
-    num_edges = 20
+  num_nodes: 10
+  num_edges: 20
 ```

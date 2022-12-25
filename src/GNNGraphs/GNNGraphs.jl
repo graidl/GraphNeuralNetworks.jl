@@ -15,6 +15,10 @@ using ChainRulesCore
 using LinearAlgebra, Random, Statistics
 import MLUtils
 using MLUtils: getobs, numobs
+import Functors
+
+include("datastore.jl")
+export DataStore
 
 include("gnngraph.jl")
 export GNNGraph, 
@@ -22,6 +26,9 @@ export GNNGraph,
        edge_features, 
        graph_features
     
+include("gnnheterograph.jl")
+export GNNHeteroGraph
+
 include("query.jl")
 export adjacency_list,
        edge_index,
@@ -32,13 +39,15 @@ export adjacency_list,
        is_bidirected,
        normalized_laplacian, 
        scaled_laplacian,
+       laplacian_lambda_max,
        # from Graphs
        adjacency_matrix, 
        degree, 
        has_self_loops,
        has_isolated_nodes,
        inneighbors,
-       outneighbors 
+       outneighbors,
+       khop_adj 
 
 include("transform.jl")
 export add_nodes,
@@ -60,6 +69,7 @@ export add_nodes,
 
 include("generate.jl")
 export rand_graph, 
+       rand_heterograph,    
        knn_graph,
        radius_graph
 
@@ -74,5 +84,7 @@ include("utils.jl")
 
 include("gatherscatter.jl")
 # _gather, _scatter
+
+
 
 end #module

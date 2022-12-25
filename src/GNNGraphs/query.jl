@@ -140,7 +140,7 @@ If `dir=:in` instead, `A[i,j] > 0` denotes the presence of an edge from node `j`
 
 User may specify the eltype `T` of the returned matrix. 
 
-If `weighted=true`, the `A` will contain the edge weigths if any, otherwise the elements of `A` will be either 0 or 1.
+If `weighted=true`, the `A` will contain the edge weights if any, otherwise the elements of `A` will be either 0 or 1.
 """
 function Graphs.adjacency_matrix(g::GNNGraph{<:COO_T}, T::DataType=eltype(g); dir=:out, weighted=true)
     if g.graph[1] isa CuVector
@@ -345,7 +345,7 @@ function node_features(g::GNNGraph)
     elseif length(g.ndata) > 1
         @error "Multiple feature arrays, access directly through `g.ndata`"
     else
-        return g.ndata[1]
+        return first(values(g.ndata))
     end
 end
 
@@ -355,7 +355,7 @@ function edge_features(g::GNNGraph)
     elseif length(g.edata) > 1
         @error "Multiple feature arrays, access directly through `g.edata`"
     else
-        return g.edata[1]
+        return first(values(g.edata))
     end
 end
 
@@ -365,7 +365,7 @@ function graph_features(g::GNNGraph)
     elseif length(g.gdata) > 1
         @error "Multiple feature arrays, access directly through `g.gdata`"
     else
-        return g.gdata[1]
+        return first(values(g.gdata))
     end
 end
 
@@ -402,6 +402,36 @@ function has_multi_edges(g::GNNGraph)
     s, t = edge_index(g)
     idxs, _ = edge_encoding(s, t, g.num_nodes)
     length(union(idxs)) < length(idxs)
+end
+
+"""
+    khop_adj(g::GNNGraph,k::Int,T::DataType=eltype(g); dir=:out, weighted=true)
+
+Return ``A^k`` where ``A`` is the adjacency matrix of the graph 'g'.
+
+"""
+function khop_adj(g::GNNGraph,k::Int, T::DataType=eltype(g); dir=:out, weighted=true)
+    return (adjacency_matrix(g, T; dir, weighted))^k
+end
+
+"""
+    laplacian_lambda_max(g::GNNGraph, T=Float32; add_self_loops=false, dir=:out)
+
+Return the largest eigenvalue of the normalized symmetric Laplacian of the graph `g`.
+
+If the graph is batched from multiple graphs, return the list of the largest eigenvalue for each graph.
+"""
+function laplacian_lambda_max(g::GNNGraph,T::DataType=Float32; 
+                             add_self_loops::Bool=false, dir::Symbol=:out)
+    if g.num_graphs==1
+        return _eigmax(normalized_laplacian(g, T; add_self_loops, dir))
+    else
+        eigenvalues=zeros(g.num_graphs)
+        for i in 1:g.num_graphs
+            eigenvalues[i] = _eigmax(normalized_laplacian(getgraph(g, i), T; add_self_loops, dir))
+        end
+        return eigenvalues
+    end
 end
 
 @non_differentiable edge_index(x...)
