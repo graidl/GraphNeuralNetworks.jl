@@ -43,7 +43,6 @@ tests = [
     "examples/node_classification_cora",
     "deprecations",
 ]
-tests = ["layers/conv"]
 
 !CUDA.functional() && @warn("CUDA unavailable, not testing GPU support")
 
@@ -53,6 +52,7 @@ tests = ["layers/conv"]
 
     for t in tests
         startswith(t, "examples") && GRAPH_T == :dense && continue     # not testing :dense since causes OutOfMememory on github's CI
+        # @show t
         include("$t.jl")
     end
 end

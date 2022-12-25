@@ -1602,7 +1602,7 @@ function (l::TransformerConv)(g::GNNGraph, x::AbstractMatrix,
 
     if l.skip_connection
         @assert size(h, 1) == size(x, 1) "In-channels must correspond to \
-            out-channels * heads if concat is used"
+            out-channels * heads if skip_connection is used"
         h += x
     end
     if !isnothing(l.BN1)
