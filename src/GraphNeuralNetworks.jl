@@ -64,9 +64,7 @@ export
     ResGatedGraphConv,
     SAGEConv,
     SGConv,
-    MHAConv,
     TransformerConv,
-    TransConv,
     
     # layers/pool
     GlobalPool,

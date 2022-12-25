@@ -1,5 +1,7 @@
 # An example of semi-supervised node classification
 
+module Trans
+
 using Flux
 using Flux: onecold, onehotbatch
 using Flux.Losses: logitcrossentropy
@@ -19,7 +21,7 @@ end
 # arguments for the `train` function 
 Base.@kwdef mutable struct Args
     η = 1f-3             # learning rate
-    epochs = 100          # number of epochs
+    epochs = 150          # number of epochs
     seed = 17             # set seed > 0 for reproducibility
     usecuda = true      # if true use cuda (if available)
     nhidden = 128        # dimension of hidden features
@@ -51,9 +53,13 @@ function train(; kws...)
     nin, nhidden, nout = size(X,1), args.nhidden, length(classes)
     
     ## DEFINE MODEL
-    model = GNNChain(GCNConv(nin => nhidden, relu),
+    model1 = GNNChain(GCNConv(nin => nhidden, relu),
                      GCNConv(nhidden => nhidden, relu), 
                      Dense(nhidden, nout))  |> device
+    model2 = GNNChain(MHAConv(nin => nhidden, relu),
+                     MHAConv(nhidden => nhidden, relu), 
+                     Dense(nhidden, nout))  |> device
+    model = model2
 
     ps = Flux.params(model)
     opt = Adam(args.η)
@@ -81,5 +87,74 @@ function train(; kws...)
     end
 end
 
-train()
+
+struct TransformerGNN
+    dense1
+    conv1
+    conv2
+    conv3
+    dense2
+end
+
+function TransformerGNN(in::Int, dh::Int, out::Int, ein::Int, heads::Int)
+    TransformerGNN(Dense(in => dh*heads), 
+        TransformerConv((dh*heads, ein) => dh; heads), 
+        TransformerConv((dh*heads, ein) => dh; heads), 
+        TransformerConv((dh*heads, ein) => dh; heads), 
+        Dense(dh*heads => out))
+end
+
+function (model::TransformerGNN)(g::GNNGraph, x, e)
+    x = model.dense1(x)
+    x = model.conv1(g, x, e)
+    x = model.conv2(g, x, e)
+    x = model.conv3(g, x, e)
+    x = model.dense2(x)
+end
+
+Flux.@functor TransformerGNN
+
+function trans()
+    adj =  [ 0 1 1 1
+             1 0 1 0
+             0 1 0 1
+             1 0 1 0]
+    adj1 = [0;;]
+    adj2 = [0 0 0 1
+           0 0 0 0
+           0 0 0 1
+           1 0 1 0]
+    N = size(adj, 1)
+    Ne = sum(adj)
+    
+    ein = 3
+    out = 2
+    dh = 6
+    heads = 3
+    in = out * heads
+    @show N, Ne, in, ein, out
+    
+
+    ge = GNNGraph(adj, ndata=rand(Float32, in, N), edata=rand(Float32, ein, Ne), 
+        graph_type=:sparse)
+    xe = node_features(ge)
+    ee = edge_features(ge)
+
+    layer = TransformerConv((in, 0) => out; heads, concat=true, 
+        add_self_loops=false, root_weight=false, ff_channels=30, skip_connection=true, batch_norm=true)
+    println(layer)
+    y = layer(ge, xe) #, ee)
+    @info "TransformerConv" y
+
+    model2 = TransformerGNN(in, dh, out, ein, heads)
+    y = model2(ge, xe, ee)
+    @info "TransformerGNN" y
+
+end
+
+end  # module
+
+Trans.trans();
+
+# train()
 

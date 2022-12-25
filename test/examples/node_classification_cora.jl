@@ -86,6 +86,7 @@ function train_many(; usecuda=false)
                 ("SAGEConv", (nin, nout) -> SAGEConv(nin => nout, relu)),
                 ("GATConv", (nin, nout) -> GATConv(nin => nout, relu)),
                 ("GINConv", (nin, nout) -> GINConv(Dense(nin, nout, relu), 0.01, aggr=mean)),
+                ("TransformerConv", (nin, nout) -> TransfomerConv())
                 ## ("ChebConv", (nin, nout) -> ChebConv(nin => nout, 2)), # not working on gpu
                 ## ("NNConv", (nin, nout) -> NNConv(nin => nout)),  # needs edge features
                 ## ("GatedGraphConv", (nin, nout) -> GatedGraphConv(nout, 2)),  # needs nin = nout
