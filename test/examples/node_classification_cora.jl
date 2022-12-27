@@ -16,10 +16,10 @@ end
 
 # arguments for the `train` function 
 Base.@kwdef mutable struct Args
-    η = 5f-3             # learning rate
+    η = 5f-3            # learning rate
     epochs = 10         # number of epochs
-    seed = 17             # set seed > 0 for reproducibility
-    usecuda = false      # if true use cuda (if available)
+    seed = 17           # set seed > 0 for reproducibility
+    usecuda = false     # if true use cuda (if available)
     nhidden = 64        # dimension of hidden features
 end
 
@@ -58,8 +58,11 @@ function train(Layer; verbose=false, kws...)
 
     ## TRAINING
     function report(epoch)
-        train = eval_loss_accuracy(X, y, train_ids, model, g)
-        test = eval_loss_accuracy(X, y, test_ids, model, g)        
+        train = eval_loss_accuracy(X, y, train_mask, model, g)
+        if isnan(train.loss)
+            error("Loss is nan")
+        end
+        test = eval_loss_accuracy(X, y, test_mask, model, g)        
         println("Epoch: $epoch   Train: $(train)   Test: $(test)")
     end
     
@@ -68,6 +71,18 @@ function train(Layer; verbose=false, kws...)
         gs = Flux.gradient(ps) do
             ŷ = model(g, X)
             logitcrossentropy(ŷ[:,train_mask], ytrain)
+        end
+        if epoch == 25
+            @show "25"
+            nans_gs = []
+            for elements in gs
+                push!(nans_gs,1 ∈ isnan.(elements))
+            end
+            nans_ps = []
+            for elements in ps
+                push!(nans_ps,1 ∈ isnan.(elements))
+            end
+            @show "critical"
         end
         Flux.Optimise.update!(opt, ps, gs)
         verbose && report(epoch)
@@ -80,14 +95,14 @@ end
 
 function train_many(; usecuda=false)
     for (layer, Layer) in [
-                ("GCNConv", (nin, nout) -> GCNConv(nin => nout, relu)),
-                ("ResGatedGraphConv", (nin, nout) -> ResGatedGraphConv(nin => nout, relu)),        
-                ("GraphConv", (nin, nout) -> GraphConv(nin => nout, relu, aggr=mean)),
-                ("SAGEConv", (nin, nout) -> SAGEConv(nin => nout, relu)),
-                ("GATConv", (nin, nout) -> GATConv(nin => nout, relu)),
-                ("GINConv", (nin, nout) -> GINConv(Dense(nin, nout, relu), 0.01, aggr=mean)),
+                # ("GCNConv", (nin, nout) -> GCNConv(nin => nout, relu)),
+                # ("ResGatedGraphConv", (nin, nout) -> ResGatedGraphConv(nin => nout, relu)),        
+                # ("GraphConv", (nin, nout) -> GraphConv(nin => nout, relu, aggr=mean)),
+                # ("SAGEConv", (nin, nout) -> SAGEConv(nin => nout, relu)),
+                # ("GATConv", (nin, nout) -> GATConv(nin => nout, relu)),
+                # ("GINConv", (nin, nout) -> GINConv(Dense(nin, nout, relu), 0.01, aggr=mean)),
                 ("TransformerConv", (nin, nout) -> TransformerConv(nin => nout, concat=false,
-                    add_self_loops=true, root_weight=false, heads=8))
+                    add_self_loops=true, root_weight=false, heads=2))
                 ## ("ChebConv", (nin, nout) -> ChebConv(nin => nout, 2)), # not working on gpu
                 ## ("NNConv", (nin, nout) -> NNConv(nin => nout)),  # needs edge features
                 ## ("GatedGraphConv", (nin, nout) -> GatedGraphConv(nout, 2)),  # needs nin = nout
@@ -95,7 +110,7 @@ function train_many(; usecuda=false)
                 ]
 
         @show layer
-        @time train_res, test_res = train(Layer; usecuda, verbose=false)
+        @time train_res, test_res = train(Layer; usecuda, verbose=true)
         @show train_res, test_res
         @test train_res.acc > 94
         @test test_res.acc > 70
