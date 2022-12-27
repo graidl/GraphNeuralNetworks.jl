@@ -80,12 +80,12 @@ end
 
 function train_many(; usecuda=false)
     for (layer, Layer) in [
-                # ("GCNConv", (nin, nout) -> GCNConv(nin => nout, relu)),
-                # ("ResGatedGraphConv", (nin, nout) -> ResGatedGraphConv(nin => nout, relu)),        
-                # ("GraphConv", (nin, nout) -> GraphConv(nin => nout, relu, aggr=mean)),
-                # ("SAGEConv", (nin, nout) -> SAGEConv(nin => nout, relu)),
-                # ("GATConv", (nin, nout) -> GATConv(nin => nout, relu)),
-                # ("GINConv", (nin, nout) -> GINConv(Dense(nin, nout, relu), 0.01, aggr=mean)),
+                ("GCNConv", (nin, nout) -> GCNConv(nin => nout, relu)),
+                ("ResGatedGraphConv", (nin, nout) -> ResGatedGraphConv(nin => nout, relu)),        
+                ("GraphConv", (nin, nout) -> GraphConv(nin => nout, relu, aggr=mean)),
+                ("SAGEConv", (nin, nout) -> SAGEConv(nin => nout, relu)),
+                ("GATConv", (nin, nout) -> GATConv(nin => nout, relu)),
+                ("GINConv", (nin, nout) -> GINConv(Dense(nin, nout, relu), 0.01, aggr=mean)),
                 ("TransformerConv", (nin, nout) -> TransformerConv(nin => nout, concat=false,
                     add_self_loops=true, root_weight=false, heads=2))
                 ## ("ChebConv", (nin, nout) -> ChebConv(nin => nout, 2)), # not working on gpu
