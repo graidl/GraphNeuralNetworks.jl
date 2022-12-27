@@ -1580,9 +1580,6 @@ function (l::TransformerConv)(g::GNNGraph, x::AbstractMatrix,
     W4x = reshape(l.W4(x), out, heads, :)
     W6e = !isnothing(l.W6) ? reshape(l.W6(e), out, heads, :) : nothing
 
-    # m = propagate(message, g, +, l; xi=(; W3x), xj=(; W2x, W4x), e=(; W6e))
-    # α_val = m.exp_uij_val ./ (m.exp_uij .+ floatmin(Float32))
-
     m = apply_edges(message_uij, g, l; xi=(; W3x), xj=(; W4x), e=(; W6e))
     α = softmax_edge_neighbors(g, m)
     α_val = propagate(message_main, g, +, l; xi=(; W3x), xj=(; W2x), e=(; W6e, α))
@@ -1628,20 +1625,6 @@ function (l::TransformerConv)(g::GNNGraph, x::AbstractMatrix,
 end
 
 (l::TransformerConv)(g::GNNGraph) = GNNGraph(g, ndata=l(g, node_features(g), edge_features(g)))
-
-function message(l::TransformerConv, xi, xj, e) 
-    key = xj.W4x
-    val = xj.W2x
-    if !isnothing(e.W6e)
-        key += e.W6e
-        val += e.W6e
-    end
-    uij = sum(xi.W3x .* key, dims=1) ./ l.sqrt_out  # min: -31, max: 86
-    exp_uij = exp.(uij)  # min: 1.7f-14, max: 3.8f37
-
-    exp_uij_val = exp_uij .* val  # min: -2f38, max; 2f38
-    return (; exp_uij, exp_uij_val)
-end
 
 function message_uij(l::TransformerConv, xi, xj, e) 
     key = xj.W4x

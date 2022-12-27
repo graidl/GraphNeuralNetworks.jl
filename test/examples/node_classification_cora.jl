@@ -59,10 +59,7 @@ function train(Layer; verbose=false, kws...)
     ## TRAINING
     function report(epoch)
         train = eval_loss_accuracy(X, y, train_mask, model, g)
-        if isnan(train.loss)
-            error("Loss is nan")
-        end
-        test = eval_loss_accuracy(X, y, test_mask, model, g)        
+        test = eval_loss_accuracy(X, y, test_mask, model, g)  
         println("Epoch: $epoch   Train: $(train)   Test: $(test)")
     end
     
@@ -71,18 +68,6 @@ function train(Layer; verbose=false, kws...)
         gs = Flux.gradient(ps) do
             ŷ = model(g, X)
             logitcrossentropy(ŷ[:,train_mask], ytrain)
-        end
-        if epoch == 25
-            @show "25"
-            nans_gs = []
-            for elements in gs
-                push!(nans_gs,1 ∈ isnan.(elements))
-            end
-            nans_ps = []
-            for elements in ps
-                push!(nans_ps,1 ∈ isnan.(elements))
-            end
-            @show "critical"
         end
         Flux.Optimise.update!(opt, ps, gs)
         verbose && report(epoch)
@@ -110,8 +95,8 @@ function train_many(; usecuda=false)
                 ]
 
         @show layer
-        @time train_res, test_res = train(Layer; usecuda, verbose=true)
-        @show train_res, test_res
+        @time train_res, test_res = train(Layer; usecuda, verbose=false)
+        # @show train_res, test_res
         @test train_res.acc > 94
         @test test_res.acc > 70
     end
