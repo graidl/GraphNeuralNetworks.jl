@@ -44,6 +44,8 @@ tests = [
     "deprecations",
 ]
 
+tests= ["examples/node_classification_cora",]
+
 !CUDA.functional() && @warn("CUDA unavailable, not testing GPU support")
 
 @testset "GraphNeuralNetworks: graph format $graph_type" for graph_type in (:coo, :dense, :sparse) 

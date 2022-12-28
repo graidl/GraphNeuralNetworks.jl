@@ -58,8 +58,8 @@ function train(Layer; verbose=false, kws...)
 
     ## TRAINING
     function report(epoch)
-        train = eval_loss_accuracy(X, y, train_ids, model, g)
-        test = eval_loss_accuracy(X, y, test_ids, model, g)        
+        train = eval_loss_accuracy(X, y, train_mask, model, g)
+        test = eval_loss_accuracy(X, y, test_mask, model, g)        
         println("Epoch: $epoch   Train: $(train)   Test: $(test)")
     end
     
@@ -80,12 +80,12 @@ end
 
 function train_many(; usecuda=false)
     for (layer, Layer) in [
-                ("GCNConv", (nin, nout) -> GCNConv(nin => nout, relu)),
-                ("ResGatedGraphConv", (nin, nout) -> ResGatedGraphConv(nin => nout, relu)),        
-                ("GraphConv", (nin, nout) -> GraphConv(nin => nout, relu, aggr=mean)),
-                ("SAGEConv", (nin, nout) -> SAGEConv(nin => nout, relu)),
-                ("GATConv", (nin, nout) -> GATConv(nin => nout, relu)),
-                ("GINConv", (nin, nout) -> GINConv(Dense(nin, nout, relu), 0.01, aggr=mean)),
+                # ("GCNConv", (nin, nout) -> GCNConv(nin => nout, relu)),
+                # ("ResGatedGraphConv", (nin, nout) -> ResGatedGraphConv(nin => nout, relu)),        
+                # ("GraphConv", (nin, nout) -> GraphConv(nin => nout, relu, aggr=mean)),
+                # ("SAGEConv", (nin, nout) -> SAGEConv(nin => nout, relu)),
+                ("GATConv", (nin, nout) -> GATv2Conv(nin => nout, relu)),
+                # ("GINConv", (nin, nout) -> GINConv(Dense(nin, nout, relu), 0.01, aggr=mean)),
                 ## ("ChebConv", (nin, nout) -> ChebConv(nin => nout, 2)), # not working on gpu
                 ## ("NNConv", (nin, nout) -> NNConv(nin => nout)),  # needs edge features
                 ## ("GatedGraphConv", (nin, nout) -> GatedGraphConv(nout, 2)),  # needs nin = nout
@@ -93,7 +93,7 @@ function train_many(; usecuda=false)
                 ]
 
         @show layer
-        @time train_res, test_res = train(Layer; usecuda, verbose=false)
+        @time train_res, test_res = train(Layer; usecuda, verbose=true)
         @test train_res.acc > 94
         @test test_res.acc > 70
     end
