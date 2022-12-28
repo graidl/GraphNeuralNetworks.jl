@@ -43,7 +43,6 @@ tests = [
     "examples/node_classification_cora",
     "deprecations",
 ]
-mtests = ["layers/conv",]
 
 !CUDA.functional() && @warn("CUDA unavailable, not testing GPU support")
 
