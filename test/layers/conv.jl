@@ -130,7 +130,7 @@
             l = GATConv((2,4) => 3, add_self_loops=false, bias=false)
             @test length(Flux.params(l)) == 3            
         end
-    end]
+    end
 
     @testset "GATv2Conv" begin
 
