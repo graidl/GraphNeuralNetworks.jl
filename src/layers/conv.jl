@@ -343,8 +343,11 @@ function (l::GATConv)(g::GNNGraph, x::AbstractMatrix, e::Union{Nothing,AbstractM
     Wx = l.dense_x(x)
     Wx = reshape(Wx, chout, heads, :)                   # chout × nheads × nnodes
 
-    m = propagate(message, g, +, l; xi=Wx, xj=Wx, e)                 ## chout × nheads × nnodes
-    x = m.β ./ m.α
+    m = apply_edges(message_scores, g, l; xi=Wx, xj=Wx, e)
+    α = softmax_edge_neighbors(g, m)
+    x = propagate(g, +; xj=Wx, e=α) do xi, xj, α               ## chout × nheads × nnodes
+        α .* xj 
+    end
 
     if !l.concat
         x = mean(x, dims=2)
@@ -355,7 +358,7 @@ function (l::GATConv)(g::GNNGraph, x::AbstractMatrix, e::Union{Nothing,AbstractM
     return x
 end
 
-function message(l::GATConv, Wxi, Wxj, e)
+function message_scores(l::GATConv, Wxi, Wxj, e)
     _, chout = l.channel
     heads = l.heads
 
@@ -367,8 +370,7 @@ function message(l::GATConv, Wxi, Wxj, e)
         Wxx = vcat(Wxi, Wxj, We)
     end
     aWW = sum(l.a .* Wxx, dims=1)   # 1 × nheads × nedges
-    α = exp.(leakyrelu.(aWW, l.negative_slope))       
-    return (α = α, β = α .* Wxj)
+    return leakyrelu.(aWW, l.negative_slope)
 end
 
 function Base.show(io::IO, l::GATConv)
@@ -480,8 +482,11 @@ function (l::GATv2Conv)(g::GNNGraph, x::AbstractMatrix, e::Union{Nothing, Abstra
     Wix = reshape(l.dense_i(x), out, heads, :)                                  # out × heads × nnodes
     Wjx = reshape(l.dense_j(x), out, heads, :)                                  # out × heads × nnodes
 
-    m = propagate(message, g, +, l; xi=Wix, xj=Wjx, e)                            # out × heads × nnodes
-    x = m.β ./ m.α
+    eij = apply_edges(message_scores, g, l; xi=Wix, xj=Wjx, e)
+    α = softmax_edge_neighbors(g, eij)
+    x = propagate(g, +; xj=Wjx, e=α) do xi, xj, α               ## chout × nheads × nnodes
+        α .* xj
+    end
 
     if !l.concat
         x = mean(x, dims=2)
@@ -491,7 +496,7 @@ function (l::GATv2Conv)(g::GNNGraph, x::AbstractMatrix, e::Union{Nothing, Abstra
     return x  
 end
 
-function message(l::GATv2Conv, Wix, Wjx, e)
+function message_scores(l::GATv2Conv, Wix, Wjx, e)
     _, out = l.channel
     heads = l.heads
 
@@ -499,9 +504,7 @@ function message(l::GATv2Conv, Wix, Wjx, e)
     if e !== nothing
         Wx += reshape(l.dense_e(e), out, heads, :)
     end 
-    eij = sum(l.a .* leakyrelu.(Wx, l.negative_slope), dims=1)   # 1 × heads × nedges
-    α = exp.(eij)
-    return (α = α, β = α .* Wjx)
+    return sum(l.a .* leakyrelu.(Wx, l.negative_slope), dims=1)   # 1 × heads × nedges
 end
 
 function Base.show(io::IO, l::GATv2Conv)
